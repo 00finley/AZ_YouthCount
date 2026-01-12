@@ -1,3 +1,4 @@
+
 // ============================================
 // CONFIGURATION FILE
 // Update these values for your deployment
@@ -10,20 +11,20 @@ export const CONFIG = {
   // 2. Go to File > Share > Publish to web
   // 3. Select "Comma-separated values (.csv)" 
   // 4. Copy the URL and paste below
-  GOOGLE_SHEETS_CSV_URL: 'YOUR_GOOGLE_SHEETS_CSV_URL_HERE',
+  GOOGLE_SHEETS_CSV_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaqtdn6kLFxGKDDaMmn0ltWT_I5Rudy79Oumhy_Z_8NRzRMQvRthppZPMY-uXVw92bAltq3Na0ExWr/pub?gid=0&single=true&output=csv',
   
   // Formspree endpoint for forms
   // Instructions:
   // 1. Go to formspree.io and create a free account
   // 2. Create a new form and copy the endpoint
   // 3. Paste below (format: https://formspree.io/f/xxxxxxxx)
-  FORMSPREE_ENDPOINT: 'https://formspree.io/f/YOUR_FORM_ID',
+  FORMSPREE_ENDPOINT: 'https://formspree.io/f/xbddjlgp',
   
   // Contact email (displayed on site)
   CONTACT_EMAIL: 'mfinley@azmag.gov',
   
   // Contact phone
-  CONTACT_PHONE: '(602) 254-6300',
+  CONTACT_PHONE: '(602) 452-5070',
   
   // Virtual session booking URL (Calendly, Cal.com, etc.)
   BOOKING_URL: 'https://calendly.com/your-booking-link',
@@ -32,7 +33,7 @@ export const CONFIG = {
   SOCIAL: {
     facebook: 'https://facebook.com/arizonayouthcount',
     twitter: 'https://twitter.com/azyouthcount',
-    instagram: 'https://instagram.com/arizonayouthcount',
+    instagram: 'https://www.instagram.com/arizonaallianceforyouth/',
   },
   
   // Count dates
