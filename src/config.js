@@ -20,7 +20,7 @@ export const CONFIG = {
   FORMSPREE_ENDPOINT: 'https://formspree.io/f/YOUR_FORM_ID',
   
   // Contact email (displayed on site)
-  CONTACT_EMAIL: 'youthcount@azmag.gov',
+  CONTACT_EMAIL: 'mfinley@azmag.gov',
   
   // Contact phone
   CONTACT_PHONE: '(602) 254-6300',
