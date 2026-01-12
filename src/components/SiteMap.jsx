@@ -54,7 +54,7 @@ const userLocationIcon = L.divIcon({
 
 // Calculate distance between two coordinates (in miles)
 function calculateDistance(lat1, lng1, lat2, lng2) {
-  const R = 3959; // Earth's radius in miles
+  const R = 3959;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = 
@@ -160,7 +160,6 @@ function MapController({ center, zoom, activeSite, sites, userLocation }) {
 
 // Site card component - shows only selected date if filtering
 function SiteCard({ site, isActive, onClick, selectedDate, userLocation }) {
-  // Filter schedule to only show selected date if one is chosen
   const displaySchedule = useMemo(() => {
     if (!selectedDate || !site.schedule) return site.schedule;
     
@@ -173,7 +172,6 @@ function SiteCard({ site, isActive, onClick, selectedDate, userLocation }) {
     });
   }, [site.schedule, selectedDate]);
   
-  // Calculate distance if user location is set
   const distance = useMemo(() => {
     if (!userLocation) return null;
     return calculateDistance(userLocation.lat, userLocation.lng, site.lat, site.lng);
@@ -190,7 +188,6 @@ function SiteCard({ site, isActive, onClick, selectedDate, userLocation }) {
       whileHover={{ x: 2 }}
       layout
     >
-      {/* Site name and distance */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <h4 className={`font-bold ${isActive ? 'text-az-orange' : 'text-gray-900'}`}>
           {site.name}
@@ -202,13 +199,11 @@ function SiteCard({ site, isActive, onClick, selectedDate, userLocation }) {
         )}
       </div>
       
-      {/* Address */}
       <p className="text-sm text-gray-500 mb-3 flex items-start gap-1">
         <span className="material-symbols-outlined text-[14px] mt-0.5 flex-shrink-0">location_on</span>
         <span>{site.address}, {site.city}</span>
       </p>
       
-      {/* Schedule - Shows only filtered date or all dates */}
       {displaySchedule && displaySchedule.length > 0 && (
         <div className="space-y-1.5">
           {displaySchedule.map((sched, idx) => (
@@ -222,7 +217,6 @@ function SiteCard({ site, isActive, onClick, selectedDate, userLocation }) {
         </div>
       )}
       
-      {/* County badge */}
       {site.county && (
         <div className="mt-3 pt-2 border-t border-gray-100">
           <span className="text-xs font-bold text-gray-400 uppercase">{site.county} County</span>
@@ -231,7 +225,6 @@ function SiteCard({ site, isActive, onClick, selectedDate, userLocation }) {
     </motion.div>
   );
 }
-
 // Multi-select county dropdown
 function CountySelect({ selectedCounties, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -372,7 +365,6 @@ function CalendarPicker({ selectedDate, onSelectDate }) {
         )}
       </div>
       
-      {/* Day headers */}
       <div className="grid grid-cols-7 gap-0.5 mb-1">
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
           <div key={i} className="text-center text-xs font-bold text-gray-400 py-1">
@@ -381,7 +373,6 @@ function CalendarPicker({ selectedDate, onSelectDate }) {
         ))}
       </div>
       
-      {/* Calendar grid */}
       <div className="space-y-0.5">
         {weeks.map((week, weekIndex) => (
           <div key={weekIndex} className="grid grid-cols-7 gap-0.5">
@@ -417,14 +408,15 @@ function CalendarPicker({ selectedDate, onSelectDate }) {
     </div>
   );
 }
-
-// Location finder component
-function LocationFinder({ userLocation, setUserLocation, isLocating, setIsLocating }) {
+// Location finder component with address/zip input
+function LocationFinder({ userLocation, setUserLocation, isLocating, setIsLocating, locationLabel, setLocationLabel }) {
+  const [addressInput, setAddressInput] = useState('');
   const [error, setError] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
   
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
-      setError('Geolocation not supported');
+      setError('Geolocation not supported by your browser');
       return;
     }
     
@@ -437,10 +429,11 @@ function LocationFinder({ userLocation, setUserLocation, isLocating, setIsLocati
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         });
+        setLocationLabel('Current Location');
         setIsLocating(false);
       },
       (err) => {
-        setError('Could not get location');
+        setError('Could not get your location. Please enter an address instead.');
         setIsLocating(false);
         console.error('Geolocation error:', err);
       },
@@ -448,9 +441,51 @@ function LocationFinder({ userLocation, setUserLocation, isLocating, setIsLocati
     );
   };
   
+  const handleAddressSearch = async () => {
+    if (!addressInput.trim()) return;
+    
+    setIsSearching(true);
+    setError(null);
+    
+    try {
+      const query = encodeURIComponent(`${addressInput.trim()}, Arizona`);
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`,
+        { headers: { 'User-Agent': 'ArizonaYouthCount/1.0' } }
+      );
+      
+      const results = await response.json();
+      
+      if (results && results.length > 0) {
+        const result = results[0];
+        setUserLocation({
+          lat: parseFloat(result.lat),
+          lng: parseFloat(result.lon),
+        });
+        setLocationLabel(addressInput.trim());
+        setAddressInput('');
+      } else {
+        setError('Address not found. Try a zip code or nearby city.');
+      }
+    } catch (err) {
+      setError('Could not search address. Please try again.');
+      console.error('Geocoding error:', err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+  
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleAddressSearch();
+    }
+  };
+  
   const clearLocation = () => {
     setUserLocation(null);
+    setLocationLabel('');
     setError(null);
+    setAddressInput('');
   };
   
   return (
@@ -458,43 +493,84 @@ function LocationFinder({ userLocation, setUserLocation, isLocating, setIsLocati
       <h4 className="font-bold text-gray-700 text-sm mb-2">Your Location</h4>
       
       {userLocation ? (
-        <div className="flex items-center gap-2">
-          <div className="flex-1 px-3 py-2 bg-az-blue/10 border border-az-blue/20 rounded-lg text-sm text-az-blue font-medium flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg">my_location</span>
-            Location set
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 px-3 py-2 bg-az-blue/10 border border-az-blue/20 rounded-lg text-sm text-az-blue font-medium flex items-center gap-2 overflow-hidden">
+              <span className="material-symbols-outlined text-lg flex-shrink-0">my_location</span>
+              <span className="truncate">{locationLabel || 'Location set'}</span>
+            </div>
+            <button
+              onClick={clearLocation}
+              className="p-2 text-gray-400 hover:text-az-red transition-colors flex-shrink-0"
+              title="Clear location"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
           </div>
-          <button
-            onClick={clearLocation}
-            className="p-2 text-gray-400 hover:text-az-red transition-colors"
-            title="Clear location"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <p className="text-xs text-gray-500">Sites are sorted by distance from this location.</p>
         </div>
       ) : (
-        <button
-          onClick={handleUseMyLocation}
-          disabled={isLocating}
-          className="w-full px-3 py-2.5 bg-az-blue text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-cyan-600 transition-colors disabled:opacity-50"
-        >
-          {isLocating ? (
-            <>
-              <motion.span
-                className="material-symbols-outlined text-lg"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+        <div className="space-y-3">
+          <div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={addressInput}
+                onChange={(e) => setAddressInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Address or zip code"
+                className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-az-blue focus:border-transparent outline-none"
+              />
+              <button
+                onClick={handleAddressSearch}
+                disabled={isSearching || !addressInput.trim()}
+                className="px-3 py-2 bg-az-purple text-white rounded-lg text-sm font-bold disabled:opacity-50 flex items-center justify-center"
               >
-                sync
-              </motion.span>
-              Finding...
-            </>
-          ) : (
-            <>
-              <span className="material-symbols-outlined text-lg">my_location</span>
-              Use My Location
-            </>
-          )}
-        </button>
+                {isSearching ? (
+                  <motion.span
+                    className="material-symbols-outlined text-lg"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  >
+                    sync
+                  </motion.span>
+                ) : (
+                  <span className="material-symbols-outlined text-lg">search</span>
+                )}
+              </button>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-px bg-gray-200"></div>
+            <span className="text-xs text-gray-400 font-medium">or</span>
+            <div className="flex-1 h-px bg-gray-200"></div>
+          </div>
+          
+          <button
+            onClick={handleUseMyLocation}
+            disabled={isLocating}
+            className="w-full px-3 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:border-az-blue hover:text-az-blue transition-colors disabled:opacity-50"
+          >
+            {isLocating ? (
+              <>
+                <motion.span
+                  className="material-symbols-outlined text-lg"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                >
+                  sync
+                </motion.span>
+                Finding...
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-lg">my_location</span>
+                Use My Current Location
+              </>
+            )}
+          </button>
+        </div>
       )}
       
       {error && (
@@ -553,7 +629,7 @@ function SiteMarker({ site, isActive, onClick }) {
             </div>
           )}
           
-          <a
+          
             href={`https://www.google.com/maps/dir/?api=1&destination=${site.lat},${site.lng}`}
             target="_blank"
             rel="noopener noreferrer"
@@ -568,21 +644,67 @@ function SiteMarker({ site, isActive, onClick }) {
   );
 }
 
+// Instructions component
+function MapInstructions() {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  return (
+    <div className="bg-az-blue/5 border border-az-blue/20 rounded-lg p-3">
+      <button 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-az-blue text-lg">help</span>
+          <span className="font-bold text-sm text-gray-700">How to Use This Tool</span>
+        </div>
+        <span className="material-symbols-outlined text-gray-400 text-lg">
+          {isExpanded ? 'expand_less' : 'expand_more'}
+        </span>
+      </button>
+      
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-3 mt-3 border-t border-az-blue/20 text-sm text-gray-600 space-y-2">
+              <p>
+                <strong className="text-gray-700">1. Find sites near you:</strong> Enter your address or zip code, or use your current location to see nearby sites sorted by distance.
+              </p>
+              <p>
+                <strong className="text-gray-700">2. Filter by county:</strong> Select one or more counties to narrow down your search.
+              </p>
+              <p>
+                <strong className="text-gray-700">3. Pick a date:</strong> Click a date on the calendar to see only sites open that day.
+              </p>
+              <p>
+                <strong className="text-gray-700">4. View details:</strong> Click any site in the list to see it on the map and get directions.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 export default function SiteMap() {
   const { sites, loading } = useSiteData();
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedCounties, setSelectedCounties] = useState([]);
   const [activeSite, setActiveSite] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
+  const [locationLabel, setLocationLabel] = useState('');
   const [isLocating, setIsLocating] = useState(false);
   
-  // Apply filters and sort by distance if location is set
   const filteredSites = useMemo(() => {
     let result = sites;
     result = filterSitesByCounties(result, selectedCounties);
     result = filterSitesByDate(result, selectedDate);
     
-    // Sort by distance if user location is set
     if (userLocation) {
       result = [...result].sort((a, b) => {
         const distA = calculateDistance(userLocation.lat, userLocation.lng, a.lat, a.lng);
@@ -598,13 +720,13 @@ export default function SiteMap() {
     setSelectedDate(null);
     setSelectedCounties([]);
     setUserLocation(null);
+    setLocationLabel('');
   };
   
   const hasFilters = selectedDate || selectedCounties.length > 0 || userLocation;
 
   return (
     <section className="w-full bg-gray-100 border-t border-gray-200" id="map">
-      {/* Section header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4">
         <div className="max-w-[1600px] mx-auto flex items-center justify-between">
           <h3 className="text-2xl font-black text-az-purple uppercase">Find a Site</h3>
@@ -620,19 +742,19 @@ export default function SiteMap() {
         </div>
       </div>
       
-      {/* Three column layout */}
       <div className="flex flex-col lg:flex-row min-h-[700px] lg:h-[700px]">
-        {/* Column 1: Filters */}
-        <div className="w-full lg:w-[280px] bg-white border-r border-gray-200 p-4 space-y-5 overflow-y-auto">
-          {/* Location finder */}
+        <div className="w-full lg:w-[300px] bg-white border-r border-gray-200 p-4 space-y-4 overflow-y-auto">
+          <MapInstructions />
+          
           <LocationFinder 
             userLocation={userLocation}
             setUserLocation={setUserLocation}
             isLocating={isLocating}
             setIsLocating={setIsLocating}
+            locationLabel={locationLabel}
+            setLocationLabel={setLocationLabel}
           />
           
-          {/* County filter */}
           <div>
             <h4 className="font-bold text-gray-700 text-sm mb-2">County</h4>
             <CountySelect 
@@ -641,13 +763,11 @@ export default function SiteMap() {
             />
           </div>
           
-          {/* Calendar picker */}
           <CalendarPicker 
             selectedDate={selectedDate} 
             onSelectDate={setSelectedDate} 
           />
           
-          {/* Results summary */}
           <div className="pt-4 border-t border-gray-100">
             <p className="text-sm text-gray-500">
               <strong className="text-gray-900">{filteredSites.length}</strong> sites found
@@ -655,7 +775,6 @@ export default function SiteMap() {
           </div>
         </div>
         
-        {/* Column 2: Site list */}
         <div className="w-full lg:w-[340px] bg-gray-50 border-r border-gray-200 flex flex-col h-[400px] lg:h-full">
           <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
             {loading ? (
@@ -697,7 +816,6 @@ export default function SiteMap() {
           </div>
         </div>
         
-        {/* Column 3: Map */}
         <div className="flex-1 relative h-[400px] lg:h-full">
           <MapContainer
             center={CONFIG.MAP_CENTER}
@@ -710,7 +828,6 @@ export default function SiteMap() {
               url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
             />
             
-            {/* User location marker */}
             {userLocation && (
               <>
                 <Marker 
@@ -719,13 +836,13 @@ export default function SiteMap() {
                 >
                   <Popup>
                     <div className="p-1 text-center">
-                      <p className="font-bold text-gray-900">Your Location</p>
+                      <p className="font-bold text-gray-900">{locationLabel || 'Your Location'}</p>
                     </div>
                   </Popup>
                 </Marker>
                 <Circle 
                   center={[userLocation.lat, userLocation.lng]}
-                  radius={16093} // 10 miles in meters
+                  radius={16093}
                   pathOptions={{ 
                     color: '#3B82F6', 
                     fillColor: '#3B82F6', 
@@ -737,7 +854,6 @@ export default function SiteMap() {
               </>
             )}
             
-            {/* Site markers */}
             {filteredSites.map(site => (
               <SiteMarker
                 key={site.id}
