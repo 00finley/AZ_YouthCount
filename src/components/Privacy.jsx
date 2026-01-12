@@ -43,8 +43,7 @@ export default function Privacy() {
               className="flex items-center gap-2"
               whileHover={{ color: "#4ade80" }}
             >
-              <span className="material-symbols-outlined">lock</span> 
-              Encrypted Data
+              
             </motion.div>
           </div>
         </motion.div>
