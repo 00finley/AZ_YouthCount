@@ -68,7 +68,7 @@ export default function About() {
                 The <strong className="text-gray-900">Arizona 2026 Youth Count</strong> is the state's first dedicated, statewide effort to hear directly from young people (ages 18-24) facing housing challenges. From urban centers to rural communities, we are building a complete picture of youth homelessness.
               </p>
               <p>
-                Traditional counts often miss young people because youth homelessness looks different. It's not just sleeping on the street—it's couch surfing, staying in motels, trading labor for a place to sleep, or living in cars.
+                Traditional counts often miss young people because youth homelessness looks different. It's not just sleeping on the street—it's couch surfing, staying in motels, trading labor or sex for a place to sleep, or living in cars.
               </p>
               
               <motion.div 
@@ -77,7 +77,7 @@ export default function About() {
                 transition={{ duration: 0.2 }}
               >
                 <p className="text-gray-900 font-bold italic">
-                  "We cannot solve a problem we do not understand. Your story helps us secure funding, design better programs, and prove to leaders that youth housing instability is an urgent crisis."
+                  "quote"
                 </p>
               </motion.div>
             </motion.div>
