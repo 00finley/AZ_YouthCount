@@ -457,9 +457,17 @@ export default function VirtualRegistration() {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-az-purple via-indigo-900 to-purple-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-az-purple via-indigo-900 to-purple-900 flex items-center justify-center p-4 relative overflow-hidden">
+        {/* Large faded background logo */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
+          <img
+            src="/logo.png"
+            alt=""
+            className="w-[600px] md:w-[800px] lg:w-[1000px] h-auto opacity-[0.07] select-none"
+          />
+        </div>
         <motion.div
-          className="bg-white rounded-3xl p-8 md:p-12 max-w-lg w-full text-center shadow-2xl"
+          className="bg-white rounded-3xl p-8 md:p-12 max-w-lg w-full text-center shadow-2xl relative z-10"
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
         >
@@ -496,9 +504,18 @@ export default function VirtualRegistration() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-az-purple via-indigo-900 to-purple-900">
+    <div className="min-h-screen bg-gradient-to-br from-az-purple via-indigo-900 to-purple-900 relative overflow-hidden">
+      {/* Large faded background logo */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
+        <img
+          src="/logo.png"
+          alt=""
+          className="w-[600px] md:w-[800px] lg:w-[1000px] h-auto opacity-[0.07] select-none"
+        />
+      </div>
+
       {/* Header */}
-      <header className="bg-white/10 backdrop-blur-md border-b border-white/10">
+      <header className="bg-white/10 backdrop-blur-md border-b border-white/10 relative z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
             <img src="/logo.png" alt="Arizona Youth Count" className="h-12 w-auto" />
@@ -514,7 +531,7 @@ export default function VirtualRegistration() {
       </header>
 
       {/* Main content */}
-      <div className="max-w-2xl mx-auto px-4 py-8 md:py-16">
+      <div className="max-w-2xl mx-auto px-4 py-8 md:py-16 relative z-10">
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
           {/* Progress */}
           <div className="bg-gray-50 px-6 py-4 border-b border-gray-100">
@@ -1044,7 +1061,7 @@ export default function VirtualRegistration() {
       </div>
 
       {/* reCAPTCHA badge notice */}
-      <div className="text-center pb-4">
+      <div className="text-center pb-4 relative z-10">
         <p className="text-white/50 text-xs">
           This site is protected by reCAPTCHA and the Google{' '}
           <a href="https://policies.google.com/privacy" className="underline">Privacy Policy</a> and{' '}
