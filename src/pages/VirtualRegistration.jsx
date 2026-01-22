@@ -457,13 +457,13 @@ export default function VirtualRegistration() {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-az-purple via-indigo-900 to-purple-900 flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Large faded background logo */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 flex items-center justify-center p-4 relative overflow-hidden">
+        {/* Large faded background logo - positioned left */}
+        <div className="absolute inset-y-0 -left-24 md:-left-12 lg:left-8 flex items-center pointer-events-none" aria-hidden="true">
           <img
             src="/logo.png"
             alt=""
-            className="w-[600px] md:w-[800px] lg:w-[1000px] h-auto opacity-[0.07] select-none"
+            className="w-[350px] md:w-[450px] lg:w-[550px] h-auto opacity-15 select-none"
           />
         </div>
         <motion.div
@@ -504,13 +504,13 @@ export default function VirtualRegistration() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-az-purple via-indigo-900 to-purple-900 relative overflow-hidden">
-      {/* Large faded background logo */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 relative overflow-hidden">
+      {/* Large faded background logo - positioned left */}
+      <div className="absolute inset-y-0 -left-24 md:-left-12 lg:left-8 flex items-center pointer-events-none" aria-hidden="true">
         <img
           src="/logo.png"
           alt=""
-          className="w-[600px] md:w-[800px] lg:w-[1000px] h-auto opacity-[0.07] select-none"
+          className="w-[350px] md:w-[450px] lg:w-[550px] h-auto opacity-15 select-none"
         />
       </div>
 
