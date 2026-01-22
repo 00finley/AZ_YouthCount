@@ -324,6 +324,38 @@ export default function VirtualRegistration() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Format phone number as (xxx) xxx-xxxx
+  const formatPhoneNumber = (value) => {
+    // Remove all non-digits
+    const digits = value.replace(/\D/g, '');
+
+    // Limit to 10 digits
+    const limited = digits.slice(0, 10);
+
+    // Format based on length
+    if (limited.length === 0) return '';
+    if (limited.length <= 3) return `(${limited}`;
+    if (limited.length <= 6) return `(${limited.slice(0, 3)}) ${limited.slice(3)}`;
+    return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`;
+  };
+
+  const handlePhoneChange = (e) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    updateForm('phoneNumber', formatted);
+  };
+
+  // Validate email address
+  const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Check if phone is complete (10 digits)
+  const isValidPhone = (phone) => {
+    const digits = phone.replace(/\D/g, '');
+    return digits.length === 10;
+  };
+
   const nextStep = () => setStep(s => s + 1);
   const prevStep = () => setStep(s => s - 1);
 
@@ -535,31 +567,43 @@ export default function VirtualRegistration() {
                   initial="initial"
                   animate="animate"
                   exit="exit"
+                  role="form"
+                  aria-labelledby="name-heading"
                 >
-                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.whatToCallYou}</h2>
-                  <p className="text-gray-500 mb-6">
-                    {t.preferredNameHint}
-                  </p>
+                  <label htmlFor="name-input" className="block">
+                    <h2 id="name-heading" className="text-2xl font-black text-gray-900 mb-2">{t.whatToCallYou}</h2>
+                    <p id="name-hint" className="text-gray-500 mb-6">
+                      {t.preferredNameHint}
+                    </p>
+                  </label>
                   <input
+                    id="name-input"
                     type="text"
                     value={formData.preferredName}
                     onChange={(e) => updateForm('preferredName', e.target.value)}
                     placeholder={t.preferredNamePlaceholder}
-                    className="w-full px-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all text-lg font-medium"
+                    aria-describedby="name-hint"
+                    aria-required="true"
+                    className="w-full px-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-2 focus:ring-az-purple/20 outline-none transition-all text-lg font-medium"
                     autoFocus
                   />
                   <div className="flex justify-between mt-8">
-                    <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
+                    <button
+                      onClick={prevStep}
+                      aria-label={t.back}
+                      className="text-gray-500 font-bold flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-az-purple/50 rounded-lg px-2 py-1"
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span> {t.back}
                     </button>
                     <motion.button
                       onClick={nextStep}
                       disabled={!formData.preferredName.trim()}
-                      className="bg-az-purple text-white font-black px-6 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      aria-label={t.continue}
+                      className="bg-az-purple text-white font-black px-6 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-az-purple/50 focus:ring-offset-2"
                       whileHover={!isMobile && formData.preferredName.trim() ? { scale: 1.02 } : {}}
                       whileTap={{ scale: 0.98 }}
                     >
-                      {t.continue} <span className="material-symbols-outlined">arrow_forward</span>
+                      {t.continue} <span className="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
                     </motion.button>
                   </div>
                 </motion.div>
@@ -573,10 +617,12 @@ export default function VirtualRegistration() {
                   initial="initial"
                   animate="animate"
                   exit="exit"
+                  role="radiogroup"
+                  aria-labelledby="language-heading"
                 >
-                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.preferredLanguage}</h2>
+                  <h2 id="language-heading" className="text-2xl font-black text-gray-900 mb-2">{t.preferredLanguage}</h2>
                   <p className="text-gray-500 mb-6">{t.languageHint}</p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4" role="group">
                     {[
                       { value: 'english', label: 'English', icon: '🇺🇸' },
                       { value: 'spanish', label: 'Español', icon: '🇲🇽' },
@@ -587,7 +633,9 @@ export default function VirtualRegistration() {
                           updateForm('language', lang.value);
                           nextStep();
                         }}
-                        className={`p-6 rounded-xl border-2 text-center transition-all ${
+                        aria-label={`Select ${lang.label}`}
+                        aria-pressed={formData.language === lang.value}
+                        className={`p-6 rounded-xl border-2 text-center transition-all focus:outline-none focus:ring-2 focus:ring-az-purple/50 focus:ring-offset-2 ${
                           formData.language === lang.value
                             ? 'border-az-purple bg-az-purple/5'
                             : 'border-gray-200 hover:border-az-blue'
@@ -595,14 +643,18 @@ export default function VirtualRegistration() {
                         whileHover={!isMobile ? { scale: 1.02, y: -2 } : {}}
                         whileTap={{ scale: 0.98 }}
                       >
-                        <span className="text-4xl mb-2 block">{lang.icon}</span>
+                        <span className="text-4xl mb-2 block" aria-hidden="true">{lang.icon}</span>
                         <span className="font-bold text-gray-900">{lang.label}</span>
                       </motion.button>
                     ))}
                   </div>
                   <div className="flex justify-start mt-8">
-                    <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
+                    <button
+                      onClick={prevStep}
+                      aria-label={t.back}
+                      className="text-gray-500 font-bold flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-az-purple/50 rounded-lg px-2 py-1"
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span> {t.back}
                     </button>
                   </div>
                 </motion.div>
@@ -668,31 +720,63 @@ export default function VirtualRegistration() {
                 >
                   {formData.contactMethod === 'phone' && (
                     <>
-                      <h2 className="text-2xl font-black text-gray-900 mb-2">{t.phoneNumber}</h2>
-                      <p className="text-gray-500 mb-6">{t.phoneHint}</p>
+                      <label htmlFor="phone-input" className="block">
+                        <h2 className="text-2xl font-black text-gray-900 mb-2">{t.phoneNumber}</h2>
+                        <p className="text-gray-500 mb-6">{t.phoneHint}</p>
+                      </label>
                       <input
+                        id="phone-input"
                         type="tel"
                         value={formData.phoneNumber}
-                        onChange={(e) => updateForm('phoneNumber', e.target.value)}
-                        placeholder={t.phonePlaceholder}
-                        className="w-full px-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all text-lg font-medium"
+                        onChange={handlePhoneChange}
+                        placeholder="(555) 123-4567"
+                        aria-label={t.phoneNumber}
+                        aria-describedby="phone-hint"
+                        className={`w-full px-4 py-4 bg-gray-50 border-2 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all text-lg font-medium ${
+                          formData.phoneNumber && !isValidPhone(formData.phoneNumber)
+                            ? 'border-red-300'
+                            : 'border-gray-200'
+                        }`}
                         autoFocus
                       />
+                      {formData.phoneNumber && !isValidPhone(formData.phoneNumber) && (
+                        <p className="text-red-500 text-sm mt-2" role="alert">
+                          {formData.language === 'spanish'
+                            ? 'Por favor ingresa un número de 10 dígitos'
+                            : 'Please enter a 10-digit phone number'}
+                        </p>
+                      )}
                     </>
                   )}
 
                   {formData.contactMethod === 'zoom' && (
                     <>
-                      <h2 className="text-2xl font-black text-gray-900 mb-2">{t.emailAddress}</h2>
-                      <p className="text-gray-500 mb-6">{t.emailHint}</p>
+                      <label htmlFor="email-input" className="block">
+                        <h2 className="text-2xl font-black text-gray-900 mb-2">{t.emailAddress}</h2>
+                        <p className="text-gray-500 mb-6">{t.emailHint}</p>
+                      </label>
                       <input
+                        id="email-input"
                         type="email"
                         value={formData.email}
                         onChange={(e) => updateForm('email', e.target.value)}
                         placeholder={t.emailPlaceholder}
-                        className="w-full px-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all text-lg font-medium"
+                        aria-label={t.emailAddress}
+                        aria-invalid={formData.email && !isValidEmail(formData.email)}
+                        className={`w-full px-4 py-4 bg-gray-50 border-2 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all text-lg font-medium ${
+                          formData.email && !isValidEmail(formData.email)
+                            ? 'border-red-300'
+                            : 'border-gray-200'
+                        }`}
                         autoFocus
                       />
+                      {formData.email && !isValidEmail(formData.email) && (
+                        <p className="text-red-500 text-sm mt-2" role="alert">
+                          {formData.language === 'spanish'
+                            ? 'Por favor ingresa un correo electrónico válido'
+                            : 'Please enter a valid email address'}
+                        </p>
+                      )}
                     </>
                   )}
 
@@ -732,15 +816,16 @@ export default function VirtualRegistration() {
                     <motion.button
                       onClick={nextStep}
                       disabled={
-                        (formData.contactMethod === 'phone' && !formData.phoneNumber.trim()) ||
-                        (formData.contactMethod === 'zoom' && !formData.email.trim()) ||
+                        (formData.contactMethod === 'phone' && !isValidPhone(formData.phoneNumber)) ||
+                        (formData.contactMethod === 'zoom' && !isValidEmail(formData.email)) ||
                         (formData.contactMethod === 'discord' && !formData.discordConfirmed)
                       }
+                      aria-label={t.continue}
                       className="bg-az-purple text-white font-black px-6 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       whileHover={!isMobile ? { scale: 1.02 } : {}}
                       whileTap={{ scale: 0.98 }}
                     >
-                      {t.continue} <span className="material-symbols-outlined">arrow_forward</span>
+                      {t.continue} <span className="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
                     </motion.button>
                   </div>
                 </motion.div>

@@ -23,7 +23,7 @@ export const BOOKED_SLOTS = [
 ];
 
 // Discord server invite link for Discord option
-export const DISCORD_INVITE_LINK = "https://discord.gg/your-invite-link";
+export const DISCORD_INVITE_LINK = "https://discord.gg/FWKqKmth";
 
 // ============================================
 // CONFIGURATION (Don't modify unless needed)
