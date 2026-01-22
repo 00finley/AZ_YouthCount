@@ -47,22 +47,6 @@ export default function Privacy() {
               Data Protected
             </motion.div>
           </div>
-
-          {/* Youth Action Board Quote */}
-          <motion.blockquote
-            className="mt-12 max-w-2xl mx-auto"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.3 }}
-          >
-            <p className="text-lg italic text-gray-300 mb-4">
-              "Being counted means our voices matter. This data helps bring real resources to young people who need them most - it's how we create change in our communities."
-            </p>
-            <footer className="text-az-orange font-bold">
-              — Youth Action Board Member
-            </footer>
-          </motion.blockquote>
         </motion.div>
       </div>
     </section>

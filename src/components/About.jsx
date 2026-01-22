@@ -40,15 +40,6 @@ export default function About() {
 
           {/* Right - Content */}
           <div className="md:col-span-7" ref={ref}>
-            <motion.span 
-              className="text-az-blue font-black uppercase tracking-widest text-sm mb-2 block"
-              initial={{ opacity: 0 }}
-              animate={isVisible ? { opacity: 1 } : {}}
-              transition={{ duration: 0.4 }}
-            >
-              Our Mission
-            </motion.span>
-            
             <motion.h2 
               className="text-4xl md:text-5xl font-black text-gray-900 mb-6 uppercase leading-none"
               initial={{ opacity: 0, y: 20 }}
@@ -77,7 +68,7 @@ export default function About() {
                 transition={{ duration: 0.2 }}
               >
                 <p className="text-gray-900 font-bold italic">
-                  "quote"
+                  "This youth count will help bring real resources to young people who need them most - it's how we create change in our communities."
                 </p>
               </motion.div>
             </motion.div>
