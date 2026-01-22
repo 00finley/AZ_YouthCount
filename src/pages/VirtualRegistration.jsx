@@ -1,25 +1,139 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { CONFIG } from '../config';
-import { 
-  getAvailableDates, 
-  getTimeSlotsForDate, 
+import {
   formatDateDisplay,
-  DISCORD_INVITE_LINK 
+  DISCORD_INVITE_LINK
 } from '../slotsConfig';
+
+// Spanish translations
+const translations = {
+  english: {
+    scheduleTitle: "Schedule Your Virtual Survey",
+    scheduleDescription: "Can't make it to a magnet site? No problem. Complete your survey via phone, Zoom, or Discord and still receive your",
+    giftCard: "gift card",
+    takesAbout: "Takes about 2 minutes to register",
+    letsGo: "Let's Go",
+    whatToCallYou: "What should we call you?",
+    preferredNameHint: "Just your preferred name – doesn't need to be your full or legal name.",
+    preferredNamePlaceholder: "Your preferred name",
+    back: "Back",
+    continue: "Continue",
+    preferredLanguage: "Preferred language?",
+    languageHint: "We'll conduct your survey in this language.",
+    howToConnect: "How would you like to connect?",
+    connectHint: "Choose whichever works best for you.",
+    phoneCall: "Phone Call",
+    phoneDesc: "We'll call you",
+    zoomCall: "Zoom Video Call",
+    zoomDesc: "Video chat link sent to email",
+    discordCall: "Discord Call",
+    discordDesc: "Voice call via Discord",
+    phoneNumber: "What's your phone number?",
+    phoneHint: "We'll call this number at your scheduled time.",
+    phonePlaceholder: "(555) 123-4567",
+    emailAddress: "What's your email?",
+    emailHint: "We'll send the Zoom link here before your appointment.",
+    emailPlaceholder: "your@email.com",
+    discordConnect: "Connect with us on Discord",
+    discordHint: "Click the button below to join our Discord server. Send us a friend request so we can call you at your scheduled time.",
+    joinDiscord: "Join AZ Youth Count Discord",
+    discordConfirm: "I've joined/sent a friend request",
+    pickDate: "Pick a date",
+    dateRange: "Weekdays from January 28 – February 13",
+    pickTime: "Pick a time",
+    availableSlots: "Available slots shown",
+    taken: "Taken",
+    changeDate: "Change date",
+    confirmAppointment: "Confirm Your Appointment",
+    name: "Name",
+    language: "Language",
+    method: "Method",
+    phone: "Phone",
+    email: "Email",
+    dateTime: "Date & Time",
+    goBack: "Go Back",
+    confirmButton: "Confirm Appointment",
+    registering: "Registering...",
+    registered: "You're Registered!",
+    weGotYou: "we've got you down for:",
+    wellCallYou: "We'll call you at",
+    wellSendZoom: "We'll send a Zoom link to",
+    discordWillConnect: "Connect with us on Discord and we'll call you at your scheduled time",
+    backToSite: "Back to main site",
+    loadingSlots: "Loading available slots...",
+    errorLoading: "Error loading slots. Please refresh.",
+  },
+  spanish: {
+    scheduleTitle: "Programa Tu Encuesta Virtual",
+    scheduleDescription: "¿No puedes ir a un sitio imán? No hay problema. Completa tu encuesta por teléfono, Zoom o Discord y aún recibirás tu",
+    giftCard: "tarjeta de regalo",
+    takesAbout: "Toma aproximadamente 2 minutos para registrarte",
+    letsGo: "Vamos",
+    whatToCallYou: "¿Cómo te gustaría que te llamemos?",
+    preferredNameHint: "Solo tu nombre preferido – no necesita ser tu nombre completo o legal.",
+    preferredNamePlaceholder: "Tu nombre preferido",
+    back: "Atrás",
+    continue: "Continuar",
+    preferredLanguage: "¿Idioma preferido?",
+    languageHint: "Realizaremos tu encuesta en este idioma.",
+    howToConnect: "¿Cómo te gustaría conectarte?",
+    connectHint: "Elige lo que funcione mejor para ti.",
+    phoneCall: "Llamada Telefónica",
+    phoneDesc: "Te llamaremos",
+    zoomCall: "Videollamada por Zoom",
+    zoomDesc: "Enlace de video enviado por correo",
+    discordCall: "Llamada por Discord",
+    discordDesc: "Llamada de voz por Discord",
+    phoneNumber: "¿Cuál es tu número de teléfono?",
+    phoneHint: "Te llamaremos a este número a la hora programada.",
+    phonePlaceholder: "(555) 123-4567",
+    emailAddress: "¿Cuál es tu correo electrónico?",
+    emailHint: "Te enviaremos el enlace de Zoom aquí antes de tu cita.",
+    emailPlaceholder: "tu@correo.com",
+    discordConnect: "Conéctate con nosotros en Discord",
+    discordHint: "Haz clic en el botón de abajo para unirte a nuestro servidor de Discord. Envíanos una solicitud de amistad para que podamos llamarte a la hora programada.",
+    joinDiscord: "Únete al Discord de AZ Youth Count",
+    discordConfirm: "Ya me uní/envié solicitud de amistad",
+    pickDate: "Elige una fecha",
+    dateRange: "Días laborables del 28 de enero al 13 de febrero",
+    pickTime: "Elige una hora",
+    availableSlots: "Se muestran los horarios disponibles",
+    taken: "Ocupado",
+    changeDate: "Cambiar fecha",
+    confirmAppointment: "Confirma Tu Cita",
+    name: "Nombre",
+    language: "Idioma",
+    method: "Método",
+    phone: "Teléfono",
+    email: "Correo",
+    dateTime: "Fecha y Hora",
+    goBack: "Regresar",
+    confirmButton: "Confirmar Cita",
+    registering: "Registrando...",
+    registered: "¡Estás Registrado!",
+    weGotYou: "te hemos anotado para:",
+    wellCallYou: "Te llamaremos al",
+    wellSendZoom: "Te enviaremos un enlace de Zoom a",
+    discordWillConnect: "Conéctate con nosotros en Discord y te llamaremos a la hora programada",
+    backToSite: "Volver al sitio principal",
+    loadingSlots: "Cargando horarios disponibles...",
+    errorLoading: "Error al cargar horarios. Por favor actualiza.",
+  }
+};
 
 // Hook to detect mobile
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
-  
+
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-  
+
   return isMobile;
 }
 
@@ -31,9 +145,9 @@ function StepIndicator({ currentStep, totalSteps, isMobile }) {
         <div
           key={i}
           className={`h-2 rounded-full transition-all duration-300 ${
-            i < currentStep 
-              ? 'bg-az-purple w-8' 
-              : i === currentStep 
+            i < currentStep
+              ? 'bg-az-purple w-8'
+              : i === currentStep
                 ? 'bg-az-blue w-8'
                 : 'bg-gray-200 w-4'
           }`}
@@ -61,7 +175,12 @@ export default function VirtualRegistration() {
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  
+  const [availableDates, setAvailableDates] = useState([]);
+  const [timeSlots, setTimeSlots] = useState([]);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(true);
+  const [slotsError, setSlotsError] = useState(null);
+  const [bookedSlots, setBookedSlots] = useState([]);
+
   const [formData, setFormData] = useState({
     preferredName: '',
     language: '',
@@ -73,11 +192,102 @@ export default function VirtualRegistration() {
     selectedTime: null,
   });
 
-  const availableDates = useMemo(() => getAvailableDates(), []);
-  const timeSlots = useMemo(() => 
-    formData.selectedDate ? getTimeSlotsForDate(formData.selectedDate) : [],
-    [formData.selectedDate]
-  );
+  // Get translations based on selected language (default to English for early steps)
+  const t = translations[formData.language] || translations.english;
+
+  // Fetch booked slots from API
+  const fetchBookedSlots = useCallback(async () => {
+    try {
+      setIsLoadingSlots(true);
+      setSlotsError(null);
+      const response = await fetch('/api/slots');
+      if (response.ok) {
+        const data = await response.json();
+        setBookedSlots(data.bookedSlots || []);
+      } else {
+        // Fallback to empty array if API not available
+        setBookedSlots([]);
+      }
+    } catch (error) {
+      console.error('Error fetching slots:', error);
+      // Fallback to empty array
+      setBookedSlots([]);
+    } finally {
+      setIsLoadingSlots(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBookedSlots();
+  }, [fetchBookedSlots]);
+
+  // Generate available dates (weekdays only, Jan 28 - Feb 13)
+  useEffect(() => {
+    const COUNT_START = new Date('2026-01-28');
+    const COUNT_END = new Date('2026-02-13');
+    const dates = [];
+    let current = new Date(COUNT_START);
+
+    while (current <= COUNT_END) {
+      const dayOfWeek = current.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        dates.push(new Date(current));
+      }
+      current.setDate(current.getDate() + 1);
+    }
+
+    setAvailableDates(dates);
+  }, []);
+
+  // Generate time slots for selected date
+  useEffect(() => {
+    if (!formData.selectedDate) {
+      setTimeSlots([]);
+      return;
+    }
+
+    const DOUBLE_SLOTS_START = new Date('2026-02-06');
+    const START_HOUR = 6;
+    const END_HOUR = 18;
+    const SLOT_DURATION_MINUTES = 30;
+    const SLOTS_BEFORE_FEB_6 = 1;
+    const SLOTS_FROM_FEB_6 = 2;
+
+    const date = formData.selectedDate;
+    const isDoubleSlotDay = date >= DOUBLE_SLOTS_START;
+    const maxSlots = isDoubleSlotDay ? SLOTS_FROM_FEB_6 : SLOTS_BEFORE_FEB_6;
+
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const slots = [];
+    for (let hour = START_HOUR; hour < END_HOUR; hour++) {
+      for (let minute = 0; minute < 60; minute += SLOT_DURATION_MINUTES) {
+        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        const slotKey = `${dateStr}-${timeStr}`;
+
+        const bookedCount = bookedSlots.filter(s => s === slotKey).length;
+        const isAvailable = bookedCount < maxSlots;
+
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        const displayMinute = minute.toString().padStart(2, '0');
+        const displayTime = `${displayHour}:${displayMinute} ${period}`;
+
+        slots.push({
+          time: timeStr,
+          displayTime,
+          slotKey,
+          isAvailable,
+          spotsLeft: maxSlots - bookedCount,
+        });
+      }
+    }
+
+    setTimeSlots(slots);
+  }, [formData.selectedDate, bookedSlots]);
 
   const variants = isMobile ? mobilePageVariants : pageVariants;
 
@@ -88,10 +298,64 @@ export default function VirtualRegistration() {
   const nextStep = () => setStep(s => s + 1);
   const prevStep = () => setStep(s => s - 1);
 
+  // Execute reCAPTCHA
+  const executeRecaptcha = async () => {
+    return new Promise((resolve) => {
+      if (window.grecaptcha && window.grecaptcha.ready) {
+        window.grecaptcha.ready(async () => {
+          try {
+            const token = await window.grecaptcha.execute(CONFIG.RECAPTCHA_SITE_KEY, { action: 'submit_registration' });
+            resolve(token);
+          } catch (error) {
+            console.error('reCAPTCHA error:', error);
+            resolve(null);
+          }
+        });
+      } else {
+        // reCAPTCHA not loaded, proceed without it
+        resolve(null);
+      }
+    });
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    
+
     try {
+      // Execute reCAPTCHA
+      const recaptchaToken = await executeRecaptcha();
+
+      // First, book the slot in the backend
+      const slotKey = formData.selectedTime?.slotKey;
+      if (slotKey) {
+        try {
+          const bookResponse = await fetch('/api/slots', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              slotKey,
+              recaptchaToken
+            }),
+          });
+
+          if (!bookResponse.ok) {
+            const errorData = await bookResponse.json();
+            if (errorData.error === 'Slot is already fully booked') {
+              alert('Sorry, this time slot was just booked by someone else. Please select a different time.');
+              // Refresh available slots
+              await fetchBookedSlots();
+              setStep(5); // Go back to date selection
+              setIsSubmitting(false);
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('Error booking slot:', error);
+          // Continue with form submission even if slot booking fails
+        }
+      }
+
+      // Submit form data
       const response = await fetch(CONFIG.FORMSPREE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -106,6 +370,7 @@ export default function VirtualRegistration() {
           appointmentDate: formData.selectedDate ? formatDateDisplay(formData.selectedDate) : '',
           appointmentTime: formData.selectedTime?.displayTime || '',
           slotKey: formData.selectedTime?.slotKey || '',
+          'g-recaptcha-response': recaptchaToken,
         }),
       });
 
@@ -126,7 +391,7 @@ export default function VirtualRegistration() {
   if (isSubmitted) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-az-purple via-indigo-900 to-purple-900 flex items-center justify-center p-4">
-        <motion.div 
+        <motion.div
           className="bg-white rounded-3xl p-8 md:p-12 max-w-lg w-full text-center shadow-2xl"
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -139,24 +404,24 @@ export default function VirtualRegistration() {
           >
             <span className="material-symbols-outlined text-5xl text-green-600">check_circle</span>
           </motion.div>
-          <h2 className="text-3xl font-black text-gray-900 mb-4">You're Registered!</h2>
+          <h2 className="text-3xl font-black text-gray-900 mb-4">{t.registered}</h2>
           <p className="text-gray-600 mb-2">
-            <strong>{formData.preferredName}</strong>, we've got you down for:
+            <strong>{formData.preferredName}</strong>, {t.weGotYou}
           </p>
           <p className="text-xl font-bold text-az-purple mb-6">
             {formData.selectedDate && formatDateDisplay(formData.selectedDate)} at {formData.selectedTime?.displayTime}
           </p>
           <p className="text-gray-500 text-sm mb-8">
-            {formData.contactMethod === 'phone' && `We'll call you at ${formData.phoneNumber}`}
-            {formData.contactMethod === 'zoom' && `We'll send a Zoom link to ${formData.email}`}
-            {formData.contactMethod === 'discord' && "Connect with us on Discord and we'll call you at your scheduled time"}
+            {formData.contactMethod === 'phone' && `${t.wellCallYou} ${formData.phoneNumber}`}
+            {formData.contactMethod === 'zoom' && `${t.wellSendZoom} ${formData.email}`}
+            {formData.contactMethod === 'discord' && t.discordWillConnect}
           </p>
-          <Link 
+          <Link
             to="/"
             className="inline-flex items-center gap-2 text-az-blue font-bold hover:underline"
           >
             <span className="material-symbols-outlined">arrow_back</span>
-            Back to main site
+            {t.backToSite}
           </Link>
         </motion.div>
       </div>
@@ -171,12 +436,12 @@ export default function VirtualRegistration() {
           <Link to="/" className="flex items-center gap-3">
             <img src="/logo.png" alt="Arizona Youth Count" className="h-12 w-auto" />
           </Link>
-          <Link 
+          <Link
             to="/"
             className="text-white/80 hover:text-white font-bold text-sm flex items-center gap-1"
           >
             <span className="material-symbols-outlined text-sm">arrow_back</span>
-            Back
+            {t.back}
           </Link>
         </div>
       </header>
@@ -202,7 +467,7 @@ export default function VirtualRegistration() {
                   exit="exit"
                   className="text-center"
                 >
-                  <motion.div 
+                  <motion.div
                     className="w-20 h-20 bg-az-blue/10 rounded-full flex items-center justify-center mx-auto mb-6"
                     animate={!isMobile ? { scale: [1, 1.05, 1] } : {}}
                     transition={{ duration: 2, repeat: Infinity }}
@@ -210,19 +475,19 @@ export default function VirtualRegistration() {
                     <span className="material-symbols-outlined text-5xl text-az-blue">videocam</span>
                   </motion.div>
                   <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-4">
-                    Schedule Your Virtual Survey
+                    {t.scheduleTitle}
                   </h2>
                   <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                    Can't make it to a magnet site? No problem. Complete your survey via phone, Zoom, or Discord and still receive your <strong className="text-az-purple">${CONFIG.GIFT_CARD_AMOUNT} gift card</strong>.
+                    {t.scheduleDescription} <strong className="text-az-purple">${CONFIG.GIFT_CARD_AMOUNT} {t.giftCard}</strong>.
                   </p>
-                  <p className="text-sm text-gray-500 mb-8">Takes about 2 minutes to register</p>
+                  <p className="text-sm text-gray-500 mb-8">{t.takesAbout}</p>
                   <motion.button
                     onClick={nextStep}
                     className="inline-flex items-center gap-2 bg-az-purple text-white font-black uppercase px-8 py-4 rounded-xl shadow-lg"
                     whileHover={!isMobile ? { scale: 1.02, y: -2 } : {}}
                     whileTap={{ scale: 0.98 }}
                   >
-                    Let's Go <span className="material-symbols-outlined">arrow_forward</span>
+                    {t.letsGo} <span className="material-symbols-outlined">arrow_forward</span>
                   </motion.button>
                 </motion.div>
               )}
@@ -236,21 +501,21 @@ export default function VirtualRegistration() {
                   animate="animate"
                   exit="exit"
                 >
-                  <h2 className="text-2xl font-black text-gray-900 mb-2">What should we call you?</h2>
+                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.whatToCallYou}</h2>
                   <p className="text-gray-500 mb-6">
-                    Just your preferred name – doesn't need to be your full or legal name.
+                    {t.preferredNameHint}
                   </p>
                   <input
                     type="text"
                     value={formData.preferredName}
                     onChange={(e) => updateForm('preferredName', e.target.value)}
-                    placeholder="Your preferred name"
+                    placeholder={t.preferredNamePlaceholder}
                     className="w-full px-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all text-lg font-medium"
                     autoFocus
                   />
                   <div className="flex justify-between mt-8">
                     <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined">arrow_back</span> Back
+                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
                     </button>
                     <motion.button
                       onClick={nextStep}
@@ -259,7 +524,7 @@ export default function VirtualRegistration() {
                       whileHover={!isMobile && formData.preferredName.trim() ? { scale: 1.02 } : {}}
                       whileTap={{ scale: 0.98 }}
                     >
-                      Continue <span className="material-symbols-outlined">arrow_forward</span>
+                      {t.continue} <span className="material-symbols-outlined">arrow_forward</span>
                     </motion.button>
                   </div>
                 </motion.div>
@@ -274,8 +539,8 @@ export default function VirtualRegistration() {
                   animate="animate"
                   exit="exit"
                 >
-                  <h2 className="text-2xl font-black text-gray-900 mb-2">Preferred language?</h2>
-                  <p className="text-gray-500 mb-6">We'll conduct your survey in this language.</p>
+                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.preferredLanguage}</h2>
+                  <p className="text-gray-500 mb-6">{t.languageHint}</p>
                   <div className="grid grid-cols-2 gap-4">
                     {[
                       { value: 'english', label: 'English', icon: '🇺🇸' },
@@ -302,7 +567,7 @@ export default function VirtualRegistration() {
                   </div>
                   <div className="flex justify-start mt-8">
                     <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined">arrow_back</span> Back
+                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
                     </button>
                   </div>
                 </motion.div>
@@ -317,13 +582,13 @@ export default function VirtualRegistration() {
                   animate="animate"
                   exit="exit"
                 >
-                  <h2 className="text-2xl font-black text-gray-900 mb-2">How would you like to connect?</h2>
-                  <p className="text-gray-500 mb-6">Choose whichever works best for you.</p>
+                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.howToConnect}</h2>
+                  <p className="text-gray-500 mb-6">{t.connectHint}</p>
                   <div className="space-y-3">
                     {[
-                      { value: 'phone', label: 'Phone Call', icon: 'call', desc: 'We\'ll call you' },
-                      { value: 'zoom', label: 'Zoom Video Call', icon: 'videocam', desc: 'Video chat link sent to email' },
-                      { value: 'discord', label: 'Discord Call', icon: 'headset_mic', desc: 'Voice call via Discord' },
+                      { value: 'phone', label: t.phoneCall, icon: 'call', desc: t.phoneDesc },
+                      { value: 'zoom', label: t.zoomCall, icon: 'videocam', desc: t.zoomDesc },
+                      { value: 'discord', label: t.discordCall, icon: 'headset_mic', desc: t.discordDesc },
                     ].map(method => (
                       <motion.button
                         key={method.value}
@@ -351,7 +616,7 @@ export default function VirtualRegistration() {
                   </div>
                   <div className="flex justify-start mt-8">
                     <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined">arrow_back</span> Back
+                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
                     </button>
                   </div>
                 </motion.div>
@@ -368,13 +633,13 @@ export default function VirtualRegistration() {
                 >
                   {formData.contactMethod === 'phone' && (
                     <>
-                      <h2 className="text-2xl font-black text-gray-900 mb-2">What's your phone number?</h2>
-                      <p className="text-gray-500 mb-6">We'll call this number at your scheduled time.</p>
+                      <h2 className="text-2xl font-black text-gray-900 mb-2">{t.phoneNumber}</h2>
+                      <p className="text-gray-500 mb-6">{t.phoneHint}</p>
                       <input
                         type="tel"
                         value={formData.phoneNumber}
                         onChange={(e) => updateForm('phoneNumber', e.target.value)}
-                        placeholder="(555) 123-4567"
+                        placeholder={t.phonePlaceholder}
                         className="w-full px-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all text-lg font-medium"
                         autoFocus
                       />
@@ -383,13 +648,13 @@ export default function VirtualRegistration() {
 
                   {formData.contactMethod === 'zoom' && (
                     <>
-                      <h2 className="text-2xl font-black text-gray-900 mb-2">What's your email?</h2>
-                      <p className="text-gray-500 mb-6">We'll send the Zoom link here before your appointment.</p>
+                      <h2 className="text-2xl font-black text-gray-900 mb-2">{t.emailAddress}</h2>
+                      <p className="text-gray-500 mb-6">{t.emailHint}</p>
                       <input
                         type="email"
                         value={formData.email}
                         onChange={(e) => updateForm('email', e.target.value)}
-                        placeholder="your@email.com"
+                        placeholder={t.emailPlaceholder}
                         className="w-full px-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all text-lg font-medium"
                         autoFocus
                       />
@@ -398,9 +663,9 @@ export default function VirtualRegistration() {
 
                   {formData.contactMethod === 'discord' && (
                     <>
-                      <h2 className="text-2xl font-black text-gray-900 mb-2">Connect with us on Discord</h2>
+                      <h2 className="text-2xl font-black text-gray-900 mb-2">{t.discordConnect}</h2>
                       <p className="text-gray-500 mb-6">
-                        Click the button below to join our Discord server. Send us a friend request so we can call you at your scheduled time.
+                        {t.discordHint}
                       </p>
                       <a
                         href={DISCORD_INVITE_LINK}
@@ -411,7 +676,7 @@ export default function VirtualRegistration() {
                         <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
                         </svg>
-                        Join AZ Youth Count Discord
+                        {t.joinDiscord}
                       </a>
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input
@@ -420,14 +685,14 @@ export default function VirtualRegistration() {
                           onChange={(e) => updateForm('discordConfirmed', e.target.checked)}
                           className="w-5 h-5 rounded border-gray-300 text-az-purple focus:ring-az-purple"
                         />
-                        <span className="text-gray-700">I've joined/sent a friend request</span>
+                        <span className="text-gray-700">{t.discordConfirm}</span>
                       </label>
                     </>
                   )}
 
                   <div className="flex justify-between mt-8">
                     <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined">arrow_back</span> Back
+                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
                     </button>
                     <motion.button
                       onClick={nextStep}
@@ -440,7 +705,7 @@ export default function VirtualRegistration() {
                       whileHover={!isMobile ? { scale: 1.02 } : {}}
                       whileTap={{ scale: 0.98 }}
                     >
-                      Continue <span className="material-symbols-outlined">arrow_forward</span>
+                      {t.continue} <span className="material-symbols-outlined">arrow_forward</span>
                     </motion.button>
                   </div>
                 </motion.div>
@@ -455,37 +720,55 @@ export default function VirtualRegistration() {
                   animate="animate"
                   exit="exit"
                 >
-                  <h2 className="text-2xl font-black text-gray-900 mb-2">Pick a date</h2>
-                  <p className="text-gray-500 mb-6">Weekdays from January 28 – February 13</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto pr-2">
-                    {availableDates.map((date, i) => (
-                      <motion.button
-                        key={i}
-                        onClick={() => {
-                          updateForm('selectedDate', date);
-                          updateForm('selectedTime', null);
-                          nextStep();
-                        }}
-                        className={`p-3 rounded-xl border-2 text-center transition-all ${
-                          formData.selectedDate?.toDateString() === date.toDateString()
-                            ? 'border-az-purple bg-az-purple/5'
-                            : 'border-gray-200 hover:border-az-blue'
-                        }`}
-                        whileHover={!isMobile ? { scale: 1.02 } : {}}
-                        whileTap={{ scale: 0.98 }}
+                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.pickDate}</h2>
+                  <p className="text-gray-500 mb-6">{t.dateRange}</p>
+                  {isLoadingSlots ? (
+                    <div className="flex items-center justify-center py-12">
+                      <motion.span
+                        className="material-symbols-outlined text-4xl text-az-purple"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                       >
-                        <span className="text-xs text-gray-500 block">
-                          {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                        </span>
-                        <span className="font-bold text-gray-900">
-                          {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </span>
-                      </motion.button>
-                    ))}
-                  </div>
+                        sync
+                      </motion.span>
+                      <span className="ml-3 text-gray-500">{t.loadingSlots}</span>
+                    </div>
+                  ) : slotsError ? (
+                    <div className="text-center py-12">
+                      <span className="material-symbols-outlined text-4xl text-red-500 mb-2">error</span>
+                      <p className="text-red-500">{t.errorLoading}</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto pr-2">
+                      {availableDates.map((date, i) => (
+                        <motion.button
+                          key={i}
+                          onClick={() => {
+                            updateForm('selectedDate', date);
+                            updateForm('selectedTime', null);
+                            nextStep();
+                          }}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${
+                            formData.selectedDate?.toDateString() === date.toDateString()
+                              ? 'border-az-purple bg-az-purple/5'
+                              : 'border-gray-200 hover:border-az-blue'
+                          }`}
+                          whileHover={!isMobile ? { scale: 1.02 } : {}}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <span className="text-xs text-gray-500 block">
+                            {date.toLocaleDateString(formData.language === 'spanish' ? 'es-MX' : 'en-US', { weekday: 'short' })}
+                          </span>
+                          <span className="font-bold text-gray-900">
+                            {date.toLocaleDateString(formData.language === 'spanish' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </motion.button>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex justify-start mt-8">
                     <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined">arrow_back</span> Back
+                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
                     </button>
                   </div>
                 </motion.div>
@@ -500,9 +783,9 @@ export default function VirtualRegistration() {
                   animate="animate"
                   exit="exit"
                 >
-                  <h2 className="text-2xl font-black text-gray-900 mb-2">Pick a time</h2>
+                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.pickTime}</h2>
                   <p className="text-gray-500 mb-6">
-                    {formData.selectedDate && formatDateDisplay(formData.selectedDate)} – Available slots shown
+                    {formData.selectedDate && formatDateDisplay(formData.selectedDate)} – {t.availableSlots}
                   </p>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[300px] overflow-y-auto pr-2">
                     {timeSlots.map((slot, i) => (
@@ -529,23 +812,23 @@ export default function VirtualRegistration() {
                           {slot.displayTime}
                         </span>
                         {!slot.isAvailable && (
-                          <span className="text-xs text-gray-400 block">Taken</span>
+                          <span className="text-xs text-gray-400 block">{t.taken}</span>
                         )}
                       </motion.button>
                     ))}
                   </div>
                   <div className="flex justify-between mt-8">
                     <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined">arrow_back</span> Back
+                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
                     </button>
-                    <button 
+                    <button
                       onClick={() => {
                         updateForm('selectedDate', null);
                         prevStep();
                       }}
                       className="text-az-blue font-bold text-sm"
                     >
-                      Change date
+                      {t.changeDate}
                     </button>
                   </div>
                 </motion.div>
@@ -561,38 +844,38 @@ export default function VirtualRegistration() {
                   exit="exit"
                   className="text-center"
                 >
-                  <h2 className="text-2xl font-black text-gray-900 mb-6">Confirm Your Appointment</h2>
-                  
+                  <h2 className="text-2xl font-black text-gray-900 mb-6">{t.confirmAppointment}</h2>
+
                   <div className="bg-gray-50 rounded-xl p-6 mb-6 text-left space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Name</span>
+                      <span className="text-gray-500">{t.name}</span>
                       <span className="font-bold text-gray-900">{formData.preferredName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Language</span>
+                      <span className="text-gray-500">{t.language}</span>
                       <span className="font-bold text-gray-900">
                         {formData.language === 'english' ? 'English' : 'Español'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Method</span>
+                      <span className="text-gray-500">{t.method}</span>
                       <span className="font-bold text-gray-900 capitalize">{formData.contactMethod}</span>
                     </div>
                     {formData.contactMethod === 'phone' && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Phone</span>
+                        <span className="text-gray-500">{t.phone}</span>
                         <span className="font-bold text-gray-900">{formData.phoneNumber}</span>
                       </div>
                     )}
                     {formData.contactMethod === 'zoom' && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Email</span>
+                        <span className="text-gray-500">{t.email}</span>
                         <span className="font-bold text-gray-900">{formData.email}</span>
                       </div>
                     )}
                     <div className="border-t border-gray-200 pt-3 mt-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Date & Time</span>
+                        <span className="text-gray-500">{t.dateTime}</span>
                         <span className="font-bold text-az-purple">
                           {formData.selectedDate && formatDateDisplay(formData.selectedDate)} at {formData.selectedTime?.displayTime}
                         </span>
@@ -601,11 +884,11 @@ export default function VirtualRegistration() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <button 
+                    <button
                       onClick={prevStep}
                       className="px-6 py-3 border-2 border-gray-200 rounded-xl font-bold text-gray-600"
                     >
-                      Go Back
+                      {t.goBack}
                     </button>
                     <motion.button
                       onClick={handleSubmit}
@@ -623,11 +906,11 @@ export default function VirtualRegistration() {
                           >
                             sync
                           </motion.span>
-                          Registering...
+                          {t.registering}
                         </>
                       ) : (
                         <>
-                          Confirm Appointment
+                          {t.confirmButton}
                           <span className="material-symbols-outlined">check</span>
                         </>
                       )}
@@ -638,6 +921,15 @@ export default function VirtualRegistration() {
             </AnimatePresence>
           </div>
         </div>
+      </div>
+
+      {/* reCAPTCHA badge notice */}
+      <div className="text-center pb-4">
+        <p className="text-white/50 text-xs">
+          This site is protected by reCAPTCHA and the Google{' '}
+          <a href="https://policies.google.com/privacy" className="underline">Privacy Policy</a> and{' '}
+          <a href="https://policies.google.com/terms" className="underline">Terms of Service</a> apply.
+        </p>
       </div>
     </div>
   );

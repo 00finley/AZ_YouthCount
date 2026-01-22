@@ -27,11 +27,34 @@ export default function GetInvolved() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
+  // Execute reCAPTCHA
+  const executeRecaptcha = async () => {
+    return new Promise((resolve) => {
+      if (window.grecaptcha && window.grecaptcha.ready) {
+        window.grecaptcha.ready(async () => {
+          try {
+            const token = await window.grecaptcha.execute(CONFIG.RECAPTCHA_SITE_KEY, { action: 'submit_partner_inquiry' });
+            resolve(token);
+          } catch (error) {
+            console.error('reCAPTCHA error:', error);
+            resolve(null);
+          }
+        });
+      } else {
+        // reCAPTCHA not loaded, proceed without it
+        resolve(null);
+      }
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
+      // Execute reCAPTCHA
+      const recaptchaToken = await executeRecaptcha();
+
       const response = await fetch(CONFIG.FORMSPREE_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -40,6 +63,7 @@ export default function GetInvolved() {
         body: JSON.stringify({
           ...formData,
           _subject: `Partner Inquiry: ${formData.organization}`,
+          'g-recaptcha-response': recaptchaToken,
         }),
       });
 
@@ -81,7 +105,7 @@ export default function GetInvolved() {
 
             <div className="space-y-8">
               {involvementOptions.map((option, index) => (
-                <motion.div 
+                <motion.div
                   key={option.title}
                   className="flex gap-6"
                   initial={{ opacity: 0, x: -20 }}
@@ -89,7 +113,7 @@ export default function GetInvolved() {
                   viewport={{ once: true }}
                   transition={{ duration: 0.5, delay: index * 0.15 }}
                 >
-                  <motion.div 
+                  <motion.div
                     className={`flex-shrink-0 w-14 h-14 ${option.color} text-white rounded-xl flex items-center justify-center shadow-lg`}
                     whileHover={{ scale: 1.1, rotate: 5 }}
                   >
@@ -225,6 +249,13 @@ export default function GetInvolved() {
                     'Submit Inquiry'
                   )}
                 </motion.button>
+
+                {/* reCAPTCHA notice */}
+                <p className="text-xs text-gray-400 text-center mt-4">
+                  This site is protected by reCAPTCHA and the Google{' '}
+                  <a href="https://policies.google.com/privacy" className="underline">Privacy Policy</a> and{' '}
+                  <a href="https://policies.google.com/terms" className="underline">Terms of Service</a> apply.
+                </p>
               </form>
             )}
           </motion.div>

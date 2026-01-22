@@ -9,9 +9,11 @@ import Eligibility from './components/Eligibility';
 import WhatToExpect from './components/WhatToExpect';
 import HowToParticipate from './components/HowToParticipate';
 import SiteMap from './components/SiteMap';
-import Toolkit from './components/Toolkit';
+import StayConnected from './components/StayConnected';
+// Toolkit and MediaCenter are hidden temporarily
+// import Toolkit from './components/Toolkit';
+// import MediaCenter from './components/MediaCenter';
 import GetInvolved from './components/GetInvolved';
-import MediaCenter from './components/MediaCenter';
 import Privacy from './components/Privacy';
 import Footer from './components/Footer';
 import EmergencyBanner from './components/EmergencyBanner';
@@ -25,11 +27,11 @@ function HomePage() {
 
   return (
     <div className="min-h-screen bg-background-light font-display">
-      <Header 
-        mobileMenuOpen={mobileMenuOpen} 
-        setMobileMenuOpen={setMobileMenuOpen} 
+      <Header
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
       />
-      
+
       <main>
         <Hero />
         <About />
@@ -37,12 +39,14 @@ function HomePage() {
         <WhatToExpect />
         <HowToParticipate />
         <SiteMap />
-        <Toolkit />
+        <StayConnected />
+        {/* Toolkit and MediaCenter sections are temporarily hidden */}
+        {/* <Toolkit /> */}
+        {/* <MediaCenter /> */}
         <GetInvolved />
-        <MediaCenter />
         <Privacy />
       </main>
-      
+
       <Footer />
       <EmergencyBanner />
     </div>

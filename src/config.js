@@ -6,20 +6,28 @@
 
 export const CONFIG = {
   // Google Sheets URL (Published as CSV)
-  // Instructions: 
+  // Instructions:
   // 1. Create a Google Sheet with your site data
   // 2. Go to File > Share > Publish to web
-  // 3. Select "Comma-separated values (.csv)" 
+  // 3. Select "Comma-separated values (.csv)"
   // 4. Copy the URL and paste below
   GOOGLE_SHEETS_CSV_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaqtdn6kLFxGKDDaMmn0ltWT_I5Rudy79Oumhy_Z_8NRzRMQvRthppZPMY-uXVw92bAltq3Na0ExWr/pub?gid=0&single=true&output=csv',
-  
+
   // Formspree endpoint for forms
   // Instructions:
   // 1. Go to formspree.io and create a free account
   // 2. Create a new form and copy the endpoint
   // 3. Paste below (format: https://formspree.io/f/xxxxxxxx)
   FORMSPREE_ENDPOINT: 'https://formspree.io/f/xbddjlgp',
-  
+
+  // Google reCAPTCHA v3
+  // Instructions:
+  // 1. Go to https://www.google.com/recaptcha/admin
+  // 2. Register a new site with reCAPTCHA v3
+  // 3. Copy the site key and paste below
+  // 4. Also update the script tag in index.html with the same site key
+  RECAPTCHA_SITE_KEY: '6LcXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+
   // Contact email (displayed on site)
   CONTACT_EMAIL: 'mfinley@azmag.gov',
   

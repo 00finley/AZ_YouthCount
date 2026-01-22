@@ -31,7 +31,7 @@ export default function Footer() {
                 { href: '#about', label: 'About the Count' },
                 { href: '#participate', label: 'Participate' },
                 { href: '#get-involved', label: 'Partner With Us' },
-                { href: '#toolkit', label: 'Resource Guide' },
+                { href: '#stay-connected', label: 'Follow Us' },
               ].map(link => (
                 <li key={link.href}>
                   <motion.a 
