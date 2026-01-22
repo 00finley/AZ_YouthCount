@@ -5,7 +5,7 @@ const navLinks = [
   { href: '#eligibility', label: 'Am I Eligible?' },
   { href: '#expect', label: 'What to Expect' },
   { href: '#map', label: 'Find a Site' },
-  { href: '#get-involved', label: 'Partners' },
+  { href: '#media-partners', label: 'Media & Partners' },
 ];
 
 export default function Header({ mobileMenuOpen, setMobileMenuOpen }) {

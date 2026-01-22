@@ -13,6 +13,7 @@ import StayConnected from './components/StayConnected';
 // Toolkit and MediaCenter are hidden temporarily
 // import Toolkit from './components/Toolkit';
 // import MediaCenter from './components/MediaCenter';
+import MediaAndPartners from './components/MediaAndPartners';
 import GetInvolved from './components/GetInvolved';
 import Privacy from './components/Privacy';
 import Footer from './components/Footer';
@@ -43,6 +44,7 @@ function HomePage() {
         {/* Toolkit and MediaCenter sections are temporarily hidden */}
         {/* <Toolkit /> */}
         {/* <MediaCenter /> */}
+        <MediaAndPartners />
         <GetInvolved />
         <Privacy />
       </main>

@@ -10,13 +10,13 @@ export default function Privacy() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <motion.div 
+          <motion.div
             className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-800 mb-6 border border-gray-700"
             whileHover={{ scale: 1.1 }}
           >
-            <motion.span 
+            <motion.span
               className="material-symbols-outlined text-3xl text-green-400"
-              animate={{ 
+              animate={{
                 scale: [1, 1.1, 1],
               }}
               transition={{ duration: 2, repeat: Infinity }}
@@ -25,27 +25,44 @@ export default function Privacy() {
             </motion.span>
           </motion.div>
 
-          <h2 className="text-3xl font-black uppercase mb-4">Your Info is Protected</h2>
-          
+          <h2 className="text-3xl font-black uppercase mb-4">Your Privacy Matters</h2>
+
           <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
-            We take your privacy seriously. All data is reported in aggregate. We do not share your personal details with law enforcement, parents, or government agencies.
+            Your information is kept private and secure. All data is reported in aggregate to protect your identity. We do not share your personal details with law enforcement, parents, or government agencies.
           </p>
 
           <div className="flex justify-center gap-8 text-sm font-bold uppercase text-gray-500">
-            <motion.div 
+            <motion.div
               className="flex items-center gap-2"
               whileHover={{ color: "#4ade80" }}
             >
-              <span className="material-symbols-outlined">visibility_off</span> 
-              100% Anonymous
+              <span className="material-symbols-outlined">lock</span>
+              Private & Secure
             </motion.div>
-            <motion.div 
+            <motion.div
               className="flex items-center gap-2"
               whileHover={{ color: "#4ade80" }}
             >
-              
+              <span className="material-symbols-outlined">shield</span>
+              Data Protected
             </motion.div>
           </div>
+
+          {/* Youth Action Board Quote */}
+          <motion.blockquote
+            className="mt-12 max-w-2xl mx-auto"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3 }}
+          >
+            <p className="text-lg italic text-gray-300 mb-4">
+              "Being counted means our voices matter. This data helps bring real resources to young people who need them most - it's how we create change in our communities."
+            </p>
+            <footer className="text-az-orange font-bold">
+              — Youth Action Board Member
+            </footer>
+          </motion.blockquote>
         </motion.div>
       </div>
     </section>
