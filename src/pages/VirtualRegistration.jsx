@@ -222,16 +222,31 @@ export default function VirtualRegistration() {
   }, [fetchBookedSlots]);
 
   // Generate available dates (weekdays only, Jan 28 - Feb 13)
+  // Must be at least 24 hours in advance
   useEffect(() => {
-    const COUNT_START = new Date('2026-01-28');
-    const COUNT_END = new Date('2026-02-13');
+    // Use local dates to avoid timezone issues
+    const COUNT_START = new Date(2026, 0, 28); // January 28, 2026 (month is 0-indexed)
+    const COUNT_END = new Date(2026, 1, 13);   // February 13, 2026
+
+    // Calculate 24 hours from now
+    const now = new Date();
+    const minBookingTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
     const dates = [];
     let current = new Date(COUNT_START);
 
     while (current <= COUNT_END) {
       const dayOfWeek = current.getDay();
+      // Only include weekdays (not Saturday=6 or Sunday=0)
+      // And only dates that are at least 24 hours away
       if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        dates.push(new Date(current));
+        // Check if this date has any slots available (at least 24hrs from now)
+        const endOfDay = new Date(current);
+        endOfDay.setHours(18, 0, 0, 0); // Last slot is at 6 PM
+
+        if (endOfDay > minBookingTime) {
+          dates.push(new Date(current));
+        }
       }
       current.setDate(current.getDate() + 1);
     }
@@ -240,18 +255,23 @@ export default function VirtualRegistration() {
   }, []);
 
   // Generate time slots for selected date
+  // Only show slots that are at least 24 hours away
   useEffect(() => {
     if (!formData.selectedDate) {
       setTimeSlots([]);
       return;
     }
 
-    const DOUBLE_SLOTS_START = new Date('2026-02-06');
+    const DOUBLE_SLOTS_START = new Date(2026, 1, 6); // February 6, 2026
     const START_HOUR = 6;
     const END_HOUR = 18;
     const SLOT_DURATION_MINUTES = 30;
     const SLOTS_BEFORE_FEB_6 = 1;
     const SLOTS_FROM_FEB_6 = 2;
+
+    // Calculate 24 hours from now
+    const now = new Date();
+    const minBookingTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     const date = formData.selectedDate;
     const isDoubleSlotDay = date >= DOUBLE_SLOTS_START;
@@ -265,6 +285,15 @@ export default function VirtualRegistration() {
     const slots = [];
     for (let hour = START_HOUR; hour < END_HOUR; hour++) {
       for (let minute = 0; minute < 60; minute += SLOT_DURATION_MINUTES) {
+        // Create a date object for this specific slot
+        const slotDateTime = new Date(date);
+        slotDateTime.setHours(hour, minute, 0, 0);
+
+        // Skip slots that are less than 24 hours away
+        if (slotDateTime <= minBookingTime) {
+          continue;
+        }
+
         const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         const slotKey = `${dateStr}-${timeStr}`;
 
