@@ -26,7 +26,7 @@ export const CONFIG = {
   // 2. Register a new site with reCAPTCHA v3
   // 3. Copy the site key and paste below
   // 4. Also update the script tag in index.html with the same site key
-  RECAPTCHA_SITE_KEY: '6LcXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+  RECAPTCHA_SITE_KEY: '6Ld-P1MsAAAAAFGuG1dVv590YBtN0BpYRtSvI1J6',
 
   // Contact email (displayed on site)
   CONTACT_EMAIL: 'mfinley@azmag.gov',

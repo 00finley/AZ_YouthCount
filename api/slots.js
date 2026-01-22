@@ -1,9 +1,7 @@
 // Vercel Serverless Function for managing booking slots
-// This uses Vercel KV (Redis) for persistent storage
-// To set up: Install @vercel/kv and configure KV in Vercel dashboard
+// Uses Redis for persistent storage
 
-// For development/fallback, we use in-memory storage
-let inMemorySlots = [];
+import { createClient } from 'redis';
 
 // Configuration
 const CONFIG = {
@@ -12,14 +10,28 @@ const CONFIG = {
   DOUBLE_SLOTS_START: new Date('2026-02-06'),
   SLOTS_BEFORE_FEB_6: 1,
   SLOTS_FROM_FEB_6: 2,
-  // reCAPTCHA secret key (set in Vercel environment variables)
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY || '',
 };
+
+const REDIS_KEY = 'az_youth_count_booked_slots';
+
+// Create Redis client
+let redis = null;
+
+async function getRedisClient() {
+  if (!redis) {
+    redis = createClient({
+      url: process.env.REDIS_URL || process.env.KV_URL,
+    });
+    redis.on('error', (err) => console.error('Redis Client Error', err));
+    await redis.connect();
+  }
+  return redis;
+}
 
 // Verify reCAPTCHA token
 async function verifyRecaptcha(token) {
   if (!CONFIG.RECAPTCHA_SECRET_KEY || !token) {
-    // Skip verification if no secret key configured
     return true;
   }
 
@@ -31,7 +43,7 @@ async function verifyRecaptcha(token) {
     });
 
     const data = await response.json();
-    return data.success && data.score >= 0.5; // Score threshold for v3
+    return data.success && data.score >= 0.5;
   } catch (error) {
     console.error('reCAPTCHA verification error:', error);
     return false;
@@ -40,18 +52,14 @@ async function verifyRecaptcha(token) {
 
 // Check if slot is valid
 function isValidSlot(slotKey) {
-  // Format: YYYY-MM-DD-HH:MM
   const regex = /^\d{4}-\d{2}-\d{2}-\d{2}:\d{2}$/;
   if (!regex.test(slotKey)) return false;
 
-  const [datePart] = slotKey.split('-').slice(0, 3).join('-').split('-');
   const dateStr = slotKey.substring(0, 10);
   const date = new Date(dateStr);
 
-  // Check if date is within count period
   if (date < CONFIG.COUNT_START || date > CONFIG.COUNT_END) return false;
 
-  // Check if it's a weekday
   const dayOfWeek = date.getDay();
   if (dayOfWeek === 0 || dayOfWeek === 6) return false;
 
@@ -64,46 +72,28 @@ function getMaxSlots(dateStr) {
   return date >= CONFIG.DOUBLE_SLOTS_START ? CONFIG.SLOTS_FROM_FEB_6 : CONFIG.SLOTS_BEFORE_FEB_6;
 }
 
-// Try to use Vercel KV if available
-async function getKV() {
-  try {
-    const { kv } = await import('@vercel/kv');
-    return kv;
-  } catch {
-    return null;
-  }
-}
-
-// Get booked slots
+// Get booked slots from Redis
 async function getBookedSlots() {
-  const kv = await getKV();
-  if (kv) {
-    try {
-      const slots = await kv.get('booked_slots');
-      return slots || [];
-    } catch (error) {
-      console.error('KV read error:', error);
-      return inMemorySlots;
-    }
+  try {
+    const client = await getRedisClient();
+    const data = await client.get(REDIS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Redis read error:', error);
+    return [];
   }
-  return inMemorySlots;
 }
 
-// Save booked slots
+// Save booked slots to Redis
 async function saveBookedSlots(slots) {
-  const kv = await getKV();
-  if (kv) {
-    try {
-      await kv.set('booked_slots', slots);
-      return true;
-    } catch (error) {
-      console.error('KV write error:', error);
-      inMemorySlots = slots;
-      return false;
-    }
+  try {
+    const client = await getRedisClient();
+    await client.set(REDIS_KEY, JSON.stringify(slots));
+    return true;
+  } catch (error) {
+    console.error('Redis write error:', error);
+    return false;
   }
-  inMemorySlots = slots;
-  return true;
 }
 
 // Main handler
@@ -128,7 +118,6 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const { slotKey, recaptchaToken } = req.body;
 
-    // Validate slot key
     if (!slotKey) {
       return res.status(400).json({ error: 'Slot key is required' });
     }
