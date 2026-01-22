@@ -358,7 +358,10 @@ export default function VirtualRegistration() {
       // Submit form data
       const response = await fetch(CONFIG.FORMSPREE_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({
           _subject: `Virtual Survey Registration: ${formData.preferredName}`,
           preferredName: formData.preferredName,
@@ -370,12 +373,15 @@ export default function VirtualRegistration() {
           appointmentDate: formData.selectedDate ? formatDateDisplay(formData.selectedDate) : '',
           appointmentTime: formData.selectedTime?.displayTime || '',
           slotKey: formData.selectedTime?.slotKey || '',
-          'g-recaptcha-response': recaptchaToken,
         }),
       });
 
       if (response.ok) {
         setIsSubmitted(true);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Formspree error:', response.status, errorData);
+        alert(`Submission failed: ${errorData.error || 'Please try again.'}`);
       }
     } catch (error) {
       console.error('Submission error:', error);
