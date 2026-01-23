@@ -8,6 +8,12 @@
       "has": [{ "type": "host", "value": "www.azyouthcount.org" }],
       "destination": "https://azyouthcount.org/:path*",
       "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "az-youth-count.vercel.app" }],
+      "destination": "https://azyouthcount.org/:path*",
+      "permanent": true
     }
   ],
   "rewrites": [
