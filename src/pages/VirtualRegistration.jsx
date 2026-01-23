@@ -410,6 +410,11 @@ export default function VirtualRegistration() {
   // Reset reCAPTCHA state when leaving confirmation step
   useEffect(() => {
     if (step !== CONFIRM_STEP) {
+      // Clear the reCAPTCHA container so it can be re-rendered fresh
+      const container = document.getElementById('recaptcha-container');
+      if (container) {
+        container.innerHTML = '';
+      }
       setRecaptchaWidgetId(null);
       setRecaptchaToken(null);
     }
@@ -423,11 +428,6 @@ export default function VirtualRegistration() {
     const renderRecaptcha = () => {
       const container = document.getElementById('recaptcha-container');
       if (!container) return;
-
-      // Check if container already has a child (reCAPTCHA already rendered)
-      if (container.hasChildNodes()) {
-        return;
-      }
 
       try {
         const widgetId = window.grecaptcha.render(container, {
