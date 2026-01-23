@@ -228,6 +228,7 @@ export default function VirtualRegistration() {
     contactMethod: '',
     phoneNumber: '',
     email: '',
+    discordUsername: '',
     discordConfirmed: false,
     selectedDate: null,
     selectedTime: null,
@@ -526,7 +527,7 @@ export default function VirtualRegistration() {
           contactMethod: formData.contactMethod,
           phoneNumber: formData.phoneNumber || 'N/A',
           email: formData.email || 'N/A',
-          discordUser: formData.contactMethod === 'discord' ? 'Will connect via Discord' : 'N/A',
+          discordUser: formData.contactMethod === 'discord' ? formData.discordUsername : 'N/A',
           appointmentDate: formData.selectedDate ? formatDateDisplay(formData.selectedDate) : '',
           appointmentTime: formData.selectedTime?.displayTime || '',
           slotKey: formData.selectedTime?.slotKey || '',
@@ -585,7 +586,13 @@ export default function VirtualRegistration() {
           <p className="text-gray-500 text-sm mb-8">
             {formData.contactMethod === 'phone' && `${t.wellCallYou} ${formData.phoneNumber}`}
             {formData.contactMethod === 'zoom' && `${t.wellSendZoom} ${formData.email}`}
-            {formData.contactMethod === 'discord' && t.discordWillConnect}
+            {formData.contactMethod === 'discord' && (
+              <>
+                {t.discordWillConnect}
+                <br />
+                <span className="font-medium text-gray-700">Discord: {formData.discordUsername}</span>
+              </>
+            )}
           </p>
           <Link
             to="/"
@@ -1011,6 +1018,26 @@ export default function VirtualRegistration() {
                         </svg>
                         {t.joinDiscord}
                       </a>
+
+                      <div className="mb-4">
+                        <label htmlFor="discord-username" className="block text-sm font-bold text-gray-700 mb-2">
+                          {formData.language === 'spanish' ? '¿Cuál es tu nombre de usuario de Discord?' : 'What is your Discord username?'}
+                        </label>
+                        <input
+                          id="discord-username"
+                          type="text"
+                          value={formData.discordUsername}
+                          onChange={(e) => updateForm('discordUsername', e.target.value)}
+                          placeholder={formData.language === 'spanish' ? 'ej: usuario#1234 o @usuario' : 'e.g. user#1234 or @username'}
+                          className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all font-medium"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          {formData.language === 'spanish'
+                            ? 'Necesitamos esto para identificarte cuando nos contactes.'
+                            : 'We need this to identify you when you reach out.'}
+                        </p>
+                      </div>
+
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input
                           type="checkbox"
@@ -1032,7 +1059,7 @@ export default function VirtualRegistration() {
                       disabled={
                         (formData.contactMethod === 'phone' && !isValidPhone(formData.phoneNumber)) ||
                         (formData.contactMethod === 'zoom' && !isValidEmail(formData.email)) ||
-                        (formData.contactMethod === 'discord' && !formData.discordConfirmed)
+                        (formData.contactMethod === 'discord' && (!formData.discordConfirmed || !formData.discordUsername.trim()))
                       }
                       aria-label={t.continue}
                       className="bg-az-purple text-white font-black px-6 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -1205,6 +1232,12 @@ export default function VirtualRegistration() {
                       <div className="flex justify-between">
                         <span className="text-gray-500">{t.email}</span>
                         <span className="font-bold text-gray-900">{formData.email}</span>
+                      </div>
+                    )}
+                    {formData.contactMethod === 'discord' && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Discord</span>
+                        <span className="font-bold text-gray-900">{formData.discordUsername}</span>
                       </div>
                     )}
                     <div className="border-t border-gray-200 pt-3 mt-3">
