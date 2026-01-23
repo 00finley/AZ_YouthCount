@@ -182,6 +182,7 @@ export default function VirtualRegistration() {
   const [slotsError, setSlotsError] = useState(null);
   const [bookedSlots, setBookedSlots] = useState([]);
   const [isCheckingGeo, setIsCheckingGeo] = useState(true);
+  const [formLoadTime] = useState(Date.now()); // Track when form loaded for bot detection
 
   // Check if user is in Arizona
   useEffect(() => {
@@ -214,6 +215,7 @@ export default function VirtualRegistration() {
     discordConfirmed: false,
     selectedDate: null,
     selectedTime: null,
+    website: '', // Honeypot field - should remain empty
   });
 
   // Get translations based on selected language (default to English for early steps)
@@ -404,6 +406,22 @@ export default function VirtualRegistration() {
   };
 
   const handleSubmit = async () => {
+    // Bot protection checks
+    // 1. Honeypot field should be empty
+    if (formData.website) {
+      console.log('Bot detected: honeypot filled');
+      setIsSubmitted(true); // Fake success to not alert bots
+      return;
+    }
+
+    // 2. Form should take at least 10 seconds to complete (humans need time)
+    const timeSpent = Date.now() - formLoadTime;
+    if (timeSpent < 10000) {
+      console.log('Bot detected: form completed too quickly');
+      setIsSubmitted(true); // Fake success to not alert bots
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -639,6 +657,17 @@ export default function VirtualRegistration() {
                     aria-required="true"
                     className="w-full px-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-2 focus:ring-az-purple/20 outline-none transition-all text-lg font-medium"
                     autoFocus
+                  />
+                  {/* Honeypot field - hidden from users, bots will fill it */}
+                  <input
+                    type="text"
+                    name="website"
+                    value={formData.website}
+                    onChange={(e) => updateForm('website', e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                    aria-hidden="true"
+                    style={{ position: 'absolute', left: '-9999px', opacity: 0 }}
                   />
                   <div className="flex justify-between mt-8">
                     <button
