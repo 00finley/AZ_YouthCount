@@ -15,6 +15,13 @@ const translations = {
     giftCard: "gift card",
     takesAbout: "Takes about 2 minutes to register",
     letsGo: "Let's Go",
+    howOldAreYou: "How old are you?",
+    ageHint: "This count is specifically for young adults ages 18-24.",
+    selectAge: "Select your age",
+    ageNotEligible: "Thank you for your interest!",
+    ageNotEligibleDesc: "This count is specifically for young adults ages 18-24. If you're experiencing housing instability, please visit our main site for other resources that may help.",
+    under18Resources: "If you're under 18, please contact a local youth shelter or call the National Runaway Safeline at 1-800-786-2929.",
+    over24Resources: "If you're 25 or older, you may be eligible for the general Point-in-Time Count. Please visit our main site for more information.",
     whatToCallYou: "What should we call you?",
     preferredNameHint: "Just your preferred name – doesn't need to be your full or legal name.",
     preferredNamePlaceholder: "Your preferred name",
@@ -71,6 +78,13 @@ const translations = {
     giftCard: "tarjeta de regalo",
     takesAbout: "Toma aproximadamente 2 minutos para registrarte",
     letsGo: "Vamos",
+    howOldAreYou: "¿Cuántos años tienes?",
+    ageHint: "Este conteo es específicamente para jóvenes adultos de 18 a 24 años.",
+    selectAge: "Selecciona tu edad",
+    ageNotEligible: "¡Gracias por tu interés!",
+    ageNotEligibleDesc: "Este conteo es específicamente para jóvenes adultos de 18 a 24 años. Si estás experimentando inestabilidad de vivienda, visita nuestro sitio principal para otros recursos que pueden ayudarte.",
+    under18Resources: "Si tienes menos de 18 años, comunícate con un refugio juvenil local o llama a la Línea Nacional de Fugitivos al 1-800-786-2929.",
+    over24Resources: "Si tienes 25 años o más, puedes ser elegible para el Conteo General de Punto en el Tiempo. Visita nuestro sitio principal para más información.",
     whatToCallYou: "¿Cómo te gustaría que te llamemos?",
     preferredNameHint: "Solo tu nombre preferido – no necesita ser tu nombre completo o legal.",
     preferredNamePlaceholder: "Tu nombre preferido",
@@ -207,6 +221,7 @@ export default function VirtualRegistration() {
   }, [navigate]);
 
   const [formData, setFormData] = useState({
+    age: null,
     preferredName: '',
     language: '',
     contactMethod: '',
@@ -217,6 +232,7 @@ export default function VirtualRegistration() {
     selectedTime: null,
     website: '', // Honeypot field - should remain empty
   });
+  const [ageIneligible, setAgeIneligible] = useState(false);
 
   // Get translations based on selected language (default to English for early steps)
   const t = translations[formData.language] || translations.english;
@@ -447,7 +463,7 @@ export default function VirtualRegistration() {
               alert('Sorry, this time slot was just booked by someone else. Please select a different time.');
               // Refresh available slots
               await fetchBookedSlots();
-              setStep(5); // Go back to date selection
+              setStep(6); // Go back to date selection
               setIsSubmitting(false);
               return;
             }
@@ -494,8 +510,8 @@ export default function VirtualRegistration() {
     }
   };
 
-  // Total steps: Welcome, Name, Language, Contact Method, Contact Details, Date, Time, Confirm
-  const totalSteps = 7;
+  // Total steps: Welcome, Age, Name, Language, Contact Method, Contact Details, Date, Time, Confirm
+  const totalSteps = 8;
 
   if (isSubmitted) {
     return (
@@ -630,8 +646,86 @@ export default function VirtualRegistration() {
                 </motion.div>
               )}
 
-              {/* Step 1: Name */}
-              {step === 1 && (
+              {/* Step 1: Age Verification */}
+              {step === 1 && !ageIneligible && (
+                <motion.div
+                  key="age"
+                  variants={variants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  role="form"
+                  aria-labelledby="age-heading"
+                >
+                  <h2 id="age-heading" className="text-2xl font-black text-gray-900 mb-2">{t.howOldAreYou}</h2>
+                  <p className="text-gray-500 mb-6">{t.ageHint}</p>
+
+                  <div className="grid grid-cols-4 gap-3 mb-8">
+                    {['Under 18', '18', '19', '20', '21', '22', '23', '24', '25+'].map((age) => (
+                      <motion.button
+                        key={age}
+                        onClick={() => {
+                          const ageValue = age === 'Under 18' ? 'under18' : age === '25+' ? 'over24' : age;
+                          updateForm('age', ageValue);
+                          if (age === 'Under 18' || age === '25+') {
+                            setAgeIneligible(true);
+                          } else {
+                            nextStep();
+                          }
+                        }}
+                        className={`py-4 px-2 rounded-xl border-2 font-bold text-lg transition-all ${
+                          formData.age === (age === 'Under 18' ? 'under18' : age === '25+' ? 'over24' : age)
+                            ? 'border-az-purple bg-az-purple/10 text-az-purple'
+                            : 'border-gray-200 hover:border-az-purple/50'
+                        }`}
+                        whileHover={!isMobile ? { scale: 1.02 } : {}}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {age}
+                      </motion.button>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-between">
+                    <button
+                      onClick={prevStep}
+                      className="text-gray-500 font-bold flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Age Ineligible Message */}
+              {step === 1 && ageIneligible && (
+                <motion.div
+                  key="age-ineligible"
+                  variants={variants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  className="text-center"
+                >
+                  <div className="w-20 h-20 bg-az-orange/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <span className="material-symbols-outlined text-5xl text-az-orange">info</span>
+                  </div>
+                  <h2 className="text-2xl font-black text-gray-900 mb-4">{t.ageNotEligible}</h2>
+                  <p className="text-gray-600 mb-6">{t.ageNotEligibleDesc}</p>
+                  <p className="text-gray-500 text-sm mb-8">
+                    {formData.age === 'under18' ? t.under18Resources : t.over24Resources}
+                  </p>
+                  <Link
+                    to="/"
+                    className="inline-flex items-center gap-2 bg-az-purple text-white font-black uppercase px-8 py-4 rounded-xl shadow-lg"
+                  >
+                    <span className="material-symbols-outlined">arrow_back</span> {t.backToSite}
+                  </Link>
+                </motion.div>
+              )}
+
+              {/* Step 2: Name */}
+              {step === 2 && (
                 <motion.div
                   key="name"
                   variants={variants}
@@ -692,7 +786,7 @@ export default function VirtualRegistration() {
               )}
 
               {/* Step 2: Language */}
-              {step === 2 && (
+              {step === 3 && (
                 <motion.div
                   key="language"
                   variants={variants}
@@ -743,7 +837,7 @@ export default function VirtualRegistration() {
               )}
 
               {/* Step 3: Contact Method */}
-              {step === 3 && (
+              {step === 4 && (
                 <motion.div
                   key="contact-method"
                   variants={variants}
@@ -792,7 +886,7 @@ export default function VirtualRegistration() {
               )}
 
               {/* Step 4: Contact Details (conditional) */}
-              {step === 4 && (
+              {step === 5 && (
                 <motion.div
                   key="contact-details"
                   variants={variants}
@@ -914,7 +1008,7 @@ export default function VirtualRegistration() {
               )}
 
               {/* Step 5: Date Selection */}
-              {step === 5 && (
+              {step === 6 && (
                 <motion.div
                   key="date"
                   variants={variants}
@@ -977,7 +1071,7 @@ export default function VirtualRegistration() {
               )}
 
               {/* Step 6: Time Selection */}
-              {step === 6 && (
+              {step === 7 && (
                 <motion.div
                   key="time"
                   variants={variants}
@@ -1037,7 +1131,7 @@ export default function VirtualRegistration() {
               )}
 
               {/* Step 7: Confirmation */}
-              {step === 7 && (
+              {step === 8 && (
                 <motion.div
                   key="confirm"
                   variants={variants}
