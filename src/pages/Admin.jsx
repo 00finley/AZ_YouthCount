@@ -1,14 +1,31 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
+// Configuration matching slots API
+const COUNT_START = new Date('2026-01-28');
+const COUNT_END = new Date('2026-02-13');
+const DOUBLE_SLOTS_START = new Date('2026-02-06');
+const SLOTS_BEFORE_FEB_6 = 1;
+const SLOTS_FROM_FEB_6 = 2;
+
 export default function Admin() {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [slots, setSlots] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [legacySlots, setLegacySlots] = useState([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-  const [actionMessage, setActionMessage] = useState('');
+  const [actionMessage, setActionMessage] = useState({ type: '', text: '' });
+  const [viewMode, setViewMode] = useState('date'); // 'date' or 'method'
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newBooking, setNewBooking] = useState({
+    date: '',
+    time: '',
+    name: '',
+    contactMethod: 'phone',
+    contactInfo: '',
+  });
 
   // Check if already authenticated (session storage)
   useEffect(() => {
@@ -21,16 +38,20 @@ export default function Admin() {
   // Fetch slots when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      fetchSlots();
+      fetchBookings();
     }
   }, [isAuthenticated]);
 
-  const fetchSlots = async () => {
+  const fetchBookings = async () => {
     setIsLoadingSlots(true);
     try {
-      const response = await fetch('/api/slots');
+      const token = sessionStorage.getItem('admin_token');
+      const response = await fetch('/api/slots', {
+        headers: { 'X-Admin-Secret': token },
+      });
       const data = await response.json();
-      setSlots(data.bookedSlots || []);
+      setBookings(data.bookings || []);
+      setLegacySlots(data.bookedSlots || []);
     } catch (err) {
       console.error('Error fetching slots:', err);
     } finally {
@@ -66,10 +87,14 @@ export default function Admin() {
     }
   };
 
-  const handleClearAll = async () => {
-    if (!confirm('Are you sure you want to clear ALL booked slots?')) return;
+  const showMessage = (type, text) => {
+    setActionMessage({ type, text });
+    setTimeout(() => setActionMessage({ type: '', text: '' }), 3000);
+  };
 
-    setActionMessage('Clearing...');
+  const handleClearAll = async () => {
+    if (!confirm('Are you sure you want to clear ALL booked slots? This cannot be undone.')) return;
+
     try {
       const token = sessionStorage.getItem('admin_token');
       const response = await fetch('/api/slots', {
@@ -78,46 +103,117 @@ export default function Admin() {
       });
 
       if (response.ok) {
-        setActionMessage('All slots cleared!');
-        setSlots([]);
+        showMessage('success', 'All slots cleared!');
+        setBookings([]);
+        setLegacySlots([]);
       } else {
-        setActionMessage('Error clearing slots');
+        showMessage('error', 'Error clearing slots');
       }
     } catch (err) {
-      setActionMessage('Error clearing slots');
+      showMessage('error', 'Error clearing slots');
     }
-
-    setTimeout(() => setActionMessage(''), 3000);
   };
 
-  const handleRemoveSlot = async (slotKey) => {
-    if (!confirm(`Remove slot ${slotKey}?`)) return;
+  const handleClearDate = async (date) => {
+    if (!confirm(`Clear all bookings for ${formatDate(date)}?`)) return;
 
-    setActionMessage('Removing...');
     try {
       const token = sessionStorage.getItem('admin_token');
-      const newSlots = slots.filter(s => s !== slotKey);
-
       const response = await fetch('/api/slots', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Secret': token,
         },
-        body: JSON.stringify({ slots: newSlots }),
+        body: JSON.stringify({ action: 'clearDate', date }),
       });
 
       if (response.ok) {
-        setActionMessage('Slot removed!');
-        setSlots(newSlots);
+        showMessage('success', `All bookings for ${date} cleared!`);
+        await fetchBookings();
       } else {
-        setActionMessage('Error removing slot');
+        showMessage('error', 'Error clearing date');
       }
     } catch (err) {
-      setActionMessage('Error removing slot');
+      showMessage('error', 'Error clearing date');
+    }
+  };
+
+  const handleRemoveBooking = async (slotKey) => {
+    const booking = bookings.find(b => b.slotKey === slotKey);
+    const displayName = booking?.name || slotKey;
+    if (!confirm(`Remove booking for ${displayName}?`)) return;
+
+    try {
+      const token = sessionStorage.getItem('admin_token');
+      const response = await fetch('/api/slots', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Secret': token,
+        },
+        body: JSON.stringify({ action: 'removeBooking', slotKey }),
+      });
+
+      if (response.ok) {
+        showMessage('success', 'Booking removed!');
+        await fetchBookings();
+      } else {
+        showMessage('error', 'Error removing booking');
+      }
+    } catch (err) {
+      showMessage('error', 'Error removing booking');
+    }
+  };
+
+  const handleAddBooking = async (e) => {
+    e.preventDefault();
+
+    if (!newBooking.date || !newBooking.time) {
+      showMessage('error', 'Please select date and time');
+      return;
     }
 
-    setTimeout(() => setActionMessage(''), 3000);
+    const slotKey = `${newBooking.date}-${newBooking.time}`;
+
+    try {
+      const token = sessionStorage.getItem('admin_token');
+      const response = await fetch('/api/slots', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Secret': token,
+        },
+        body: JSON.stringify({
+          action: 'addBooking',
+          booking: {
+            slotKey,
+            name: newBooking.name || 'Admin Added',
+            contactMethod: newBooking.contactMethod,
+            contactInfo: newBooking.contactInfo,
+          },
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        showMessage('success', 'Booking added!');
+        setShowAddForm(false);
+        setNewBooking({
+          date: '',
+          time: '',
+          name: '',
+          contactMethod: 'phone',
+          contactInfo: '',
+        });
+        await fetchBookings();
+      } else {
+        showMessage('error', data.error || 'Error adding booking');
+      }
+    } catch (err) {
+      showMessage('error', 'Error adding booking');
+    }
   };
 
   const handleLogout = () => {
@@ -127,9 +223,28 @@ export default function Admin() {
     setPassword('');
   };
 
+  // Format date for display
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Format time for display
+  const formatTime = (timeStr) => {
+    const [hours, minutes] = timeStr.split(':');
+    const hour = parseInt(hours);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+    return `${displayHour}:${minutes} ${period}`;
+  };
+
   // Format slot key for display
   const formatSlot = (slotKey) => {
-    // slotKey format: 2026-01-28-14:00
     const parts = slotKey.split('-');
     const date = new Date(parts[0], parseInt(parts[1]) - 1, parseInt(parts[2]));
     const time = parts[3];
@@ -140,23 +255,74 @@ export default function Admin() {
       day: 'numeric'
     });
 
-    // Convert 24h to 12h
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const period = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-    const timeStr = `${displayHour}:${minutes} ${period}`;
-
-    return `${dateStr} at ${timeStr}`;
+    return `${dateStr} at ${formatTime(time)}`;
   };
 
-  // Group slots by date
-  const groupedSlots = slots.reduce((acc, slot) => {
-    const date = slot.substring(0, 10);
+  // Get contact method icon
+  const getMethodIcon = (method) => {
+    switch (method) {
+      case 'phone': return 'call';
+      case 'zoom': return 'videocam';
+      case 'discord': return 'headset_mic';
+      default: return 'person';
+    }
+  };
+
+  // Get contact method color
+  const getMethodColor = (method) => {
+    switch (method) {
+      case 'phone': return 'bg-green-100 text-green-700';
+      case 'zoom': return 'bg-blue-100 text-blue-700';
+      case 'discord': return 'bg-indigo-100 text-indigo-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  // Group bookings by date
+  const groupedByDate = bookings.reduce((acc, booking) => {
+    const date = booking.slotKey.substring(0, 10);
     if (!acc[date]) acc[date] = [];
-    acc[date].push(slot);
+    acc[date].push(booking);
     return acc;
   }, {});
+
+  // Group bookings by contact method
+  const groupedByMethod = bookings.reduce((acc, booking) => {
+    const method = booking.contactMethod || 'unknown';
+    if (!acc[method]) acc[method] = [];
+    acc[method].push(booking);
+    return acc;
+  }, {});
+
+  // Generate available dates for the date picker
+  const availableDates = [];
+  let current = new Date(COUNT_START);
+  while (current <= COUNT_END) {
+    const dayOfWeek = current.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      const year = current.getFullYear();
+      const month = (current.getMonth() + 1).toString().padStart(2, '0');
+      const day = current.getDate().toString().padStart(2, '0');
+      availableDates.push(`${year}-${month}-${day}`);
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Generate time slots
+  const timeSlots = [];
+  for (let hour = 6; hour < 18; hour++) {
+    for (let minute = 0; minute < 60; minute += 30) {
+      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      timeSlots.push(timeStr);
+    }
+  }
+
+  // Count bookings by method
+  const methodCounts = {
+    phone: groupedByMethod.phone?.length || 0,
+    zoom: groupedByMethod.zoom?.length || 0,
+    discord: groupedByMethod.discord?.length || 0,
+  };
 
   if (!isAuthenticated) {
     return (
@@ -201,9 +367,9 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-black text-gray-900">Slot Admin</h1>
+      <header className="bg-white shadow-sm border-b sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+          <h1 className="text-xl font-black text-gray-900">Booking Admin</h1>
           <button
             onClick={handleLogout}
             className="text-gray-500 hover:text-gray-700 font-medium text-sm"
@@ -214,26 +380,77 @@ export default function Admin() {
       </header>
 
       {/* Main */}
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        {/* Actions */}
-        <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">Booked Slots</h2>
-              <p className="text-gray-500 text-sm">
-                {slots.length} slot{slots.length !== 1 ? 's' : ''} currently booked
-              </p>
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+            <div className="text-3xl font-black text-gray-900">{bookings.length}</div>
+            <div className="text-sm text-gray-500">Total Bookings</div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-green-600">call</span>
+              <span className="text-2xl font-bold text-gray-900">{methodCounts.phone}</span>
             </div>
-            <div className="flex gap-3">
+            <div className="text-sm text-gray-500">Phone</div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-blue-600">videocam</span>
+              <span className="text-2xl font-bold text-gray-900">{methodCounts.zoom}</span>
+            </div>
+            <div className="text-sm text-gray-500">Zoom</div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-indigo-600">headset_mic</span>
+              <span className="text-2xl font-bold text-gray-900">{methodCounts.discord}</span>
+            </div>
+            <div className="text-sm text-gray-500">Discord</div>
+          </div>
+        </div>
+
+        {/* Actions Bar */}
+        <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-500">View by:</span>
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('date')}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                    viewMode === 'date' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'
+                  }`}
+                >
+                  Date
+                </button>
+                <button
+                  onClick={() => setViewMode('method')}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                    viewMode === 'method' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'
+                  }`}
+                >
+                  Contact Method
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2">
               <button
-                onClick={fetchSlots}
+                onClick={() => setShowAddForm(true)}
+                className="px-4 py-2 bg-az-purple text-white font-medium rounded-lg hover:bg-az-purple/90 flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-lg">add</span>
+                Add Booking
+              </button>
+              <button
+                onClick={fetchBookings}
                 className="px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200"
               >
                 Refresh
               </button>
               <button
                 onClick={handleClearAll}
-                disabled={slots.length === 0}
+                disabled={bookings.length === 0}
                 className="px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 disabled:opacity-50"
               >
                 Clear All
@@ -241,46 +458,153 @@ export default function Admin() {
             </div>
           </div>
 
-          {actionMessage && (
-            <div className="mt-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm font-medium">
-              {actionMessage}
+          {actionMessage.text && (
+            <div className={`mt-4 p-3 rounded-lg text-sm font-medium ${
+              actionMessage.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+            }`}>
+              {actionMessage.text}
             </div>
           )}
         </div>
 
-        {/* Slots List */}
+        {/* Add Booking Form Modal */}
+        {showAddForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <motion.div
+              className="bg-white rounded-2xl p-6 max-w-md w-full"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Add New Booking</h2>
+              <form onSubmit={handleAddBooking} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <select
+                    value={newBooking.date}
+                    onChange={(e) => setNewBooking({ ...newBooking, date: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-az-purple"
+                  >
+                    <option value="">Select a date</option>
+                    {availableDates.map(date => (
+                      <option key={date} value={date}>{formatDate(date)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                  <select
+                    value={newBooking.time}
+                    onChange={(e) => setNewBooking({ ...newBooking, time: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-az-purple"
+                  >
+                    <option value="">Select a time</option>
+                    {timeSlots.map(time => (
+                      <option key={time} value={time}>{formatTime(time)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={newBooking.name}
+                    onChange={(e) => setNewBooking({ ...newBooking, name: e.target.value })}
+                    placeholder="Participant name"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-az-purple"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Method</label>
+                  <select
+                    value={newBooking.contactMethod}
+                    onChange={(e) => setNewBooking({ ...newBooking, contactMethod: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-az-purple"
+                  >
+                    <option value="phone">Phone</option>
+                    <option value="zoom">Zoom</option>
+                    <option value="discord">Discord</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Info</label>
+                  <input
+                    type="text"
+                    value={newBooking.contactInfo}
+                    onChange={(e) => setNewBooking({ ...newBooking, contactInfo: e.target.value })}
+                    placeholder={newBooking.contactMethod === 'phone' ? 'Phone number' : newBooking.contactMethod === 'zoom' ? 'Email' : 'Discord username'}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-az-purple"
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
+                    className="flex-1 py-2 border-2 border-gray-200 rounded-lg font-medium text-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 bg-az-purple text-white rounded-lg font-medium"
+                  >
+                    Add Booking
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Bookings List */}
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
           {isLoadingSlots ? (
-            <div className="p-8 text-center text-gray-500">Loading slots...</div>
-          ) : slots.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              No slots booked yet
+            <div className="p-8 text-center text-gray-500">Loading bookings...</div>
+          ) : bookings.length === 0 ? (
+            <div className="p-8 text-center">
+              <span className="material-symbols-outlined text-4xl text-gray-300 mb-2">event_busy</span>
+              <p className="text-gray-500">No bookings yet</p>
+              {legacySlots.length > 0 && (
+                <p className="text-sm text-gray-400 mt-2">
+                  ({legacySlots.length} legacy slot{legacySlots.length !== 1 ? 's' : ''} without details)
+                </p>
+              )}
             </div>
-          ) : (
+          ) : viewMode === 'date' ? (
+            // View by Date
             <div className="divide-y">
-              {Object.entries(groupedSlots)
+              {Object.entries(groupedByDate)
                 .sort(([a], [b]) => a.localeCompare(b))
-                .map(([date, dateSlots]) => (
+                .map(([date, dateBookings]) => (
                   <div key={date} className="p-4">
-                    <h3 className="font-bold text-gray-900 mb-3">
-                      {new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-bold text-gray-900">{formatDate(date)}</h3>
+                      <button
+                        onClick={() => handleClearDate(date)}
+                        className="text-sm text-red-500 hover:text-red-700 font-medium"
+                      >
+                        Clear Day
+                      </button>
+                    </div>
                     <div className="space-y-2">
-                      {dateSlots.sort().map((slot) => (
+                      {dateBookings.sort((a, b) => a.slotKey.localeCompare(b.slotKey)).map((booking) => (
                         <div
-                          key={slot}
+                          key={booking.id || booking.slotKey}
                           className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                          <span className="font-medium text-gray-700">
-                            {formatSlot(slot)}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getMethodColor(booking.contactMethod)}`}>
+                              <span className="material-symbols-outlined text-sm">{getMethodIcon(booking.contactMethod)}</span>
+                            </div>
+                            <div>
+                              <div className="font-medium text-gray-900">{booking.name || 'Unknown'}</div>
+                              <div className="text-sm text-gray-500">
+                                {formatTime(booking.slotKey.split('-')[3])}
+                                {booking.contactInfo && ` - ${booking.contactInfo}`}
+                              </div>
+                            </div>
+                          </div>
                           <button
-                            onClick={() => handleRemoveSlot(slot)}
+                            onClick={() => handleRemoveBooking(booking.slotKey)}
                             className="px-3 py-1 text-red-600 hover:bg-red-50 rounded font-medium text-sm"
                           >
                             Remove
@@ -291,8 +615,59 @@ export default function Admin() {
                   </div>
                 ))}
             </div>
+          ) : (
+            // View by Contact Method
+            <div className="divide-y">
+              {['phone', 'zoom', 'discord'].map((method) => {
+                const methodBookings = groupedByMethod[method] || [];
+                if (methodBookings.length === 0) return null;
+                return (
+                  <div key={method} className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getMethodColor(method)}`}>
+                        <span className="material-symbols-outlined text-sm">{getMethodIcon(method)}</span>
+                      </div>
+                      <h3 className="font-bold text-gray-900 capitalize">{method}</h3>
+                      <span className="text-sm text-gray-500">({methodBookings.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {methodBookings.sort((a, b) => a.slotKey.localeCompare(b.slotKey)).map((booking) => (
+                        <div
+                          key={booking.id || booking.slotKey}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        >
+                          <div>
+                            <div className="font-medium text-gray-900">{booking.name || 'Unknown'}</div>
+                            <div className="text-sm text-gray-500">
+                              {formatSlot(booking.slotKey)}
+                              {booking.contactInfo && ` - ${booking.contactInfo}`}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveBooking(booking.slotKey)}
+                            className="px-3 py-1 text-red-600 hover:bg-red-50 rounded font-medium text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
+
+        {/* Legacy slots notice */}
+        {legacySlots.length > bookings.length && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+            <p className="text-sm text-yellow-700">
+              <strong>Note:</strong> There are {legacySlots.length - bookings.length} booking(s) from before the system upgrade that don't have participant details.
+              These slots are still reserved but won't show detailed information.
+            </p>
+          </div>
+        )}
       </main>
     </div>
   );

@@ -486,13 +486,23 @@ export default function VirtualRegistration() {
       // First, book the slot in the backend
       const slotKey = formData.selectedTime?.slotKey;
       if (slotKey) {
+        // Determine contact info based on method
+        const contactInfo = formData.contactMethod === 'phone'
+          ? formData.phoneNumber
+          : formData.contactMethod === 'zoom'
+            ? formData.email
+            : formData.discordUsername;
+
         try {
           const bookResponse = await fetch('/api/slots', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               slotKey,
-              recaptchaToken
+              recaptchaToken,
+              name: formData.preferredName,
+              contactMethod: formData.contactMethod,
+              contactInfo,
             }),
           });
 
