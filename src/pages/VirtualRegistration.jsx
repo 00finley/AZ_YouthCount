@@ -195,9 +195,11 @@ export default function VirtualRegistration() {
   const [isLoadingSlots, setIsLoadingSlots] = useState(true);
   const [slotsError, setSlotsError] = useState(null);
   const [bookedSlots, setBookedSlots] = useState([]);
+  const [availableSlots, setAvailableSlots] = useState({}); // Volunteer-based availability
   const [isCheckingGeo, setIsCheckingGeo] = useState(true);
   const [formLoadTime] = useState(Date.now()); // Track when form loaded for bot detection
   const [recaptchaToken, setRecaptchaToken] = useState(null); // reCAPTCHA v2 token
+  const [assignedVolunteer, setAssignedVolunteer] = useState(null); // Volunteer assigned to booking
 
   // Check if user is in Arizona
   useEffect(() => {
@@ -239,7 +241,7 @@ export default function VirtualRegistration() {
   // Get translations based on selected language (default to English for early steps)
   const t = translations[formData.language] || translations.english;
 
-  // Fetch booked slots from API
+  // Fetch booked slots and volunteer availability from API
   const fetchBookedSlots = useCallback(async () => {
     try {
       setIsLoadingSlots(true);
@@ -248,14 +250,15 @@ export default function VirtualRegistration() {
       if (response.ok) {
         const data = await response.json();
         setBookedSlots(data.bookedSlots || []);
+        setAvailableSlots(data.availableSlots || {});
       } else {
-        // Fallback to empty array if API not available
         setBookedSlots([]);
+        setAvailableSlots({});
       }
     } catch (error) {
       console.error('Error fetching slots:', error);
-      // Fallback to empty array
       setBookedSlots([]);
+      setAvailableSlots({});
     } finally {
       setIsLoadingSlots(false);
     }
@@ -265,102 +268,96 @@ export default function VirtualRegistration() {
     fetchBookedSlots();
   }, [fetchBookedSlots]);
 
-  // Generate available dates (weekdays only, Jan 28 - Feb 13)
-  // Must be at least 24 hours in advance
+  // Generate available dates based on volunteer availability
   useEffect(() => {
-    // Use local dates to avoid timezone issues
-    const COUNT_START = new Date(2026, 0, 28); // January 28, 2026 (month is 0-indexed)
-    const COUNT_END = new Date(2026, 1, 13);   // February 13, 2026
+    if (Object.keys(availableSlots).length === 0) return;
 
-    // Calculate 24 hours from now
     const now = new Date();
     const minBookingTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     const dates = [];
-    let current = new Date(COUNT_START);
 
-    while (current <= COUNT_END) {
-      const dayOfWeek = current.getDay();
-      // Only include weekdays (not Saturday=6 or Sunday=0)
-      // And only dates that are at least 24 hours away
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        // Check if this date has any slots available (at least 24hrs from now)
-        const endOfDay = new Date(current);
-        endOfDay.setHours(18, 0, 0, 0); // Last slot is at 6 PM
+    // Go through each date in availableSlots
+    for (const dateStr of Object.keys(availableSlots)) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
 
-        if (endOfDay > minBookingTime) {
-          dates.push(new Date(current));
-        }
+      // Check if this date has any available slots with volunteers
+      const dateSlots = availableSlots[dateStr] || [];
+      const hasAvailableSlot = dateSlots.some(slot => {
+        if (!slot.isAvailable) return false;
+
+        // Check if slot is at least 24 hours away
+        const [hours, minutes] = slot.time.split(':').map(Number);
+        const slotDateTime = new Date(date);
+        slotDateTime.setHours(hours, minutes, 0, 0);
+
+        return slotDateTime > minBookingTime;
+      });
+
+      if (hasAvailableSlot) {
+        dates.push(date);
       }
-      current.setDate(current.getDate() + 1);
     }
 
+    // Sort dates chronologically
+    dates.sort((a, b) => a - b);
     setAvailableDates(dates);
-  }, []);
+  }, [availableSlots]);
 
-  // Generate time slots for selected date
-  // Only show slots that are at least 24 hours away
+  // Generate time slots for selected date based on volunteer availability
   useEffect(() => {
-    if (!formData.selectedDate) {
+    if (!formData.selectedDate || Object.keys(availableSlots).length === 0) {
       setTimeSlots([]);
       return;
     }
 
-    const DOUBLE_SLOTS_START = new Date(2026, 1, 6); // February 6, 2026
-    const START_HOUR = 6;
-    const END_HOUR = 18;
-    const SLOT_DURATION_MINUTES = 30;
-    const SLOTS_BEFORE_FEB_6 = 1;
-    const SLOTS_FROM_FEB_6 = 2;
-
-    // Calculate 24 hours from now
     const now = new Date();
     const minBookingTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     const date = formData.selectedDate;
-    const isDoubleSlotDay = date >= DOUBLE_SLOTS_START;
-    const maxSlots = isDoubleSlotDay ? SLOTS_FROM_FEB_6 : SLOTS_BEFORE_FEB_6;
-
     const year = date.getFullYear();
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
 
+    // Get slots for this date from API response
+    const dateSlots = availableSlots[dateStr] || [];
+
     const slots = [];
-    for (let hour = START_HOUR; hour < END_HOUR; hour++) {
-      for (let minute = 0; minute < 60; minute += SLOT_DURATION_MINUTES) {
-        // Create a date object for this specific slot
-        const slotDateTime = new Date(date);
-        slotDateTime.setHours(hour, minute, 0, 0);
+    for (const slotInfo of dateSlots) {
+      const [hours, minutes] = slotInfo.time.split(':').map(Number);
 
-        // Skip slots that are less than 24 hours away
-        if (slotDateTime <= minBookingTime) {
-          continue;
-        }
+      // Create a date object for this specific slot
+      const slotDateTime = new Date(date);
+      slotDateTime.setHours(hours, minutes, 0, 0);
 
-        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        const slotKey = `${dateStr}-${timeStr}`;
-
-        const bookedCount = bookedSlots.filter(s => s === slotKey).length;
-        const isAvailable = bookedCount < maxSlots;
-
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const displayMinute = minute.toString().padStart(2, '0');
-        const displayTime = `${displayHour}:${displayMinute} ${period}`;
-
-        slots.push({
-          time: timeStr,
-          displayTime,
-          slotKey,
-          isAvailable,
-          spotsLeft: maxSlots - bookedCount,
-        });
+      // Skip slots that are less than 24 hours away
+      if (slotDateTime <= minBookingTime) {
+        continue;
       }
+
+      // Skip slots with no available volunteers
+      if (!slotInfo.hasVolunteer) {
+        continue;
+      }
+
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHour = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+      const displayMinute = minutes.toString().padStart(2, '0');
+      const displayTime = `${displayHour}:${displayMinute} ${period}`;
+
+      slots.push({
+        time: slotInfo.time,
+        displayTime,
+        slotKey: slotInfo.slotKey,
+        isAvailable: slotInfo.isAvailable,
+        availableVolunteerCount: slotInfo.availableVolunteerCount,
+      });
     }
 
     setTimeSlots(slots);
-  }, [formData.selectedDate, bookedSlots]);
+  }, [formData.selectedDate, availableSlots]);
 
   const variants = isMobile ? mobilePageVariants : pageVariants;
 
@@ -406,9 +403,13 @@ export default function VirtualRegistration() {
   // Track if reCAPTCHA widget has been rendered
   const [recaptchaWidgetId, setRecaptchaWidgetId] = useState(null);
 
+  // New step order:
+  // 0: Welcome, 1: Age, 2: Name, 3: Language, 4: Date, 5: Time, 6: Contact Method, 7: Contact Details, 8: Confirm
+  const CONFIRM_STEP = 8;
+
   // Render reCAPTCHA widget when on confirmation step
   useEffect(() => {
-    if (step !== 8) return;
+    if (step !== CONFIRM_STEP) return;
     if (recaptchaWidgetId !== null) return; // Already rendered
 
     const renderRecaptcha = () => {
@@ -506,20 +507,29 @@ export default function VirtualRegistration() {
             }),
           });
 
+          const bookData = await bookResponse.json();
+
           if (!bookResponse.ok) {
-            const errorData = await bookResponse.json();
-            if (errorData.error === 'Slot is already fully booked') {
-              alert('Sorry, this time slot was just booked by someone else. Please select a different time.');
+            if (bookData.error === 'Slot is already fully booked' || bookData.error === 'No volunteers available for this time slot') {
+              alert('Sorry, this time slot is no longer available. Please select a different time.');
               // Refresh available slots
               await fetchBookedSlots();
-              setStep(6); // Go back to date selection
+              setStep(4); // Go back to date selection
               setIsSubmitting(false);
               return;
             }
+            throw new Error(bookData.error || 'Booking failed');
+          }
+
+          // Store the assigned volunteer
+          if (bookData.assignedVolunteer) {
+            setAssignedVolunteer(bookData.assignedVolunteer);
           }
         } catch (error) {
           console.error('Error booking slot:', error);
-          // Continue with form submission even if slot booking fails
+          alert('Error booking slot. Please try again.');
+          setIsSubmitting(false);
+          return;
         }
       }
 
@@ -541,6 +551,7 @@ export default function VirtualRegistration() {
           appointmentDate: formData.selectedDate ? formatDateDisplay(formData.selectedDate) : '',
           appointmentTime: formData.selectedTime?.displayTime || '',
           slotKey: formData.selectedTime?.slotKey || '',
+          assignedVolunteer: assignedVolunteer || 'N/A',
         }),
       });
 
@@ -559,7 +570,8 @@ export default function VirtualRegistration() {
     }
   };
 
-  // Total steps: Welcome, Age, Name, Language, Contact Method, Contact Details, Date, Time, Confirm
+  // Total steps: Welcome, Age, Name, Language, Date, Time, Contact Method, Contact Details, Confirm
+  // Step 0: Welcome, 1: Age, 2: Name, 3: Language, 4: Date, 5: Time, 6: Contact Method, 7: Contact Details, 8: Confirm
   const totalSteps = 8;
 
   if (isSubmitted) {
@@ -891,8 +903,151 @@ export default function VirtualRegistration() {
                 </motion.div>
               )}
 
-              {/* Step 3: Contact Method */}
+              {/* Step 4: Date Selection */}
               {step === 4 && (
+                <motion.div
+                  key="date"
+                  variants={variants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                >
+                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.pickDate}</h2>
+                  <p className="text-gray-500 mb-6">{t.dateRange}</p>
+                  {isLoadingSlots ? (
+                    <div className="flex items-center justify-center py-12">
+                      <motion.span
+                        className="material-symbols-outlined text-4xl text-az-purple"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      >
+                        sync
+                      </motion.span>
+                      <span className="ml-3 text-gray-500">{t.loadingSlots}</span>
+                    </div>
+                  ) : slotsError ? (
+                    <div className="text-center py-12">
+                      <span className="material-symbols-outlined text-4xl text-red-500 mb-2">error</span>
+                      <p className="text-red-500">{t.errorLoading}</p>
+                    </div>
+                  ) : availableDates.length === 0 ? (
+                    <div className="text-center py-12">
+                      <span className="material-symbols-outlined text-4xl text-gray-400 mb-2">event_busy</span>
+                      <p className="text-gray-500">
+                        {formData.language === 'spanish'
+                          ? 'No hay horarios disponibles en este momento. Por favor, vuelve a intentarlo más tarde.'
+                          : 'No available times at the moment. Please check back later.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto pr-2">
+                      {availableDates.map((date, i) => (
+                        <motion.button
+                          key={i}
+                          onClick={() => {
+                            updateForm('selectedDate', date);
+                            updateForm('selectedTime', null);
+                            nextStep();
+                          }}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${
+                            formData.selectedDate?.toDateString() === date.toDateString()
+                              ? 'border-az-purple bg-az-purple/5'
+                              : 'border-gray-200 hover:border-az-blue'
+                          }`}
+                          whileHover={!isMobile ? { scale: 1.02 } : {}}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <span className="text-xs text-gray-500 block">
+                            {date.toLocaleDateString(formData.language === 'spanish' ? 'es-MX' : 'en-US', { weekday: 'short' })}
+                          </span>
+                          <span className="font-bold text-gray-900">
+                            {date.toLocaleDateString(formData.language === 'spanish' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </motion.button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex justify-start mt-8">
+                    <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
+                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Step 5: Time Selection */}
+              {step === 5 && (
+                <motion.div
+                  key="time"
+                  variants={variants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                >
+                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.pickTime}</h2>
+                  <p className="text-gray-500 mb-6">
+                    {formData.selectedDate && formatDateDisplay(formData.selectedDate)} – {t.availableSlots}
+                  </p>
+                  {timeSlots.length === 0 ? (
+                    <div className="text-center py-12">
+                      <span className="material-symbols-outlined text-4xl text-gray-400 mb-2">schedule</span>
+                      <p className="text-gray-500">
+                        {formData.language === 'spanish'
+                          ? 'No hay horarios disponibles para esta fecha.'
+                          : 'No available times for this date.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[300px] overflow-y-auto pr-2">
+                      {timeSlots.map((slot, i) => (
+                        <motion.button
+                          key={i}
+                          onClick={() => {
+                            if (slot.isAvailable) {
+                              updateForm('selectedTime', slot);
+                              nextStep();
+                            }
+                          }}
+                          disabled={!slot.isAvailable}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${
+                            !slot.isAvailable
+                              ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                              : formData.selectedTime?.slotKey === slot.slotKey
+                                ? 'border-az-purple bg-az-purple/5'
+                                : 'border-gray-200 hover:border-az-blue'
+                          }`}
+                          whileHover={!isMobile && slot.isAvailable ? { scale: 1.02 } : {}}
+                          whileTap={slot.isAvailable ? { scale: 0.98 } : {}}
+                        >
+                          <span className={`font-bold ${slot.isAvailable ? 'text-gray-900' : 'text-gray-300'}`}>
+                            {slot.displayTime}
+                          </span>
+                          {!slot.isAvailable && (
+                            <span className="text-xs text-gray-400 block">{t.taken}</span>
+                          )}
+                        </motion.button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex justify-between mt-8">
+                    <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
+                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
+                    </button>
+                    <button
+                      onClick={() => {
+                        updateForm('selectedDate', null);
+                        prevStep();
+                      }}
+                      className="text-az-blue font-bold text-sm"
+                    >
+                      {t.changeDate}
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Step 6: Contact Method */}
+              {step === 6 && (
                 <motion.div
                   key="contact-method"
                   variants={variants}
@@ -906,7 +1061,8 @@ export default function VirtualRegistration() {
                     {[
                       { value: 'phone', label: t.phoneCall, icon: 'call', desc: t.phoneDesc },
                       { value: 'zoom', label: t.zoomCall, icon: 'videocam', desc: t.zoomDesc },
-                      { value: 'discord', label: t.discordCall, icon: 'headset_mic', desc: t.discordDesc },
+                      // Discord temporarily disabled until peer availability is added
+                      // { value: 'discord', label: t.discordCall, icon: 'headset_mic', desc: t.discordDesc },
                     ].map(method => (
                       <motion.button
                         key={method.value}
@@ -940,8 +1096,8 @@ export default function VirtualRegistration() {
                 </motion.div>
               )}
 
-              {/* Step 4: Contact Details (conditional) */}
-              {step === 5 && (
+              {/* Step 7: Contact Details (conditional) */}
+              {step === 7 && (
                 <motion.div
                   key="contact-details"
                   variants={variants}
@@ -1082,130 +1238,7 @@ export default function VirtualRegistration() {
                 </motion.div>
               )}
 
-              {/* Step 5: Date Selection */}
-              {step === 6 && (
-                <motion.div
-                  key="date"
-                  variants={variants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                >
-                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.pickDate}</h2>
-                  <p className="text-gray-500 mb-6">{t.dateRange}</p>
-                  {isLoadingSlots ? (
-                    <div className="flex items-center justify-center py-12">
-                      <motion.span
-                        className="material-symbols-outlined text-4xl text-az-purple"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      >
-                        sync
-                      </motion.span>
-                      <span className="ml-3 text-gray-500">{t.loadingSlots}</span>
-                    </div>
-                  ) : slotsError ? (
-                    <div className="text-center py-12">
-                      <span className="material-symbols-outlined text-4xl text-red-500 mb-2">error</span>
-                      <p className="text-red-500">{t.errorLoading}</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto pr-2">
-                      {availableDates.map((date, i) => (
-                        <motion.button
-                          key={i}
-                          onClick={() => {
-                            updateForm('selectedDate', date);
-                            updateForm('selectedTime', null);
-                            nextStep();
-                          }}
-                          className={`p-3 rounded-xl border-2 text-center transition-all ${
-                            formData.selectedDate?.toDateString() === date.toDateString()
-                              ? 'border-az-purple bg-az-purple/5'
-                              : 'border-gray-200 hover:border-az-blue'
-                          }`}
-                          whileHover={!isMobile ? { scale: 1.02 } : {}}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <span className="text-xs text-gray-500 block">
-                            {date.toLocaleDateString(formData.language === 'spanish' ? 'es-MX' : 'en-US', { weekday: 'short' })}
-                          </span>
-                          <span className="font-bold text-gray-900">
-                            {date.toLocaleDateString(formData.language === 'spanish' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric' })}
-                          </span>
-                        </motion.button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex justify-start mt-8">
-                    <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Step 6: Time Selection */}
-              {step === 7 && (
-                <motion.div
-                  key="time"
-                  variants={variants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                >
-                  <h2 className="text-2xl font-black text-gray-900 mb-2">{t.pickTime}</h2>
-                  <p className="text-gray-500 mb-6">
-                    {formData.selectedDate && formatDateDisplay(formData.selectedDate)} – {t.availableSlots}
-                  </p>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[300px] overflow-y-auto pr-2">
-                    {timeSlots.map((slot, i) => (
-                      <motion.button
-                        key={i}
-                        onClick={() => {
-                          if (slot.isAvailable) {
-                            updateForm('selectedTime', slot);
-                            nextStep();
-                          }
-                        }}
-                        disabled={!slot.isAvailable}
-                        className={`p-3 rounded-xl border-2 text-center transition-all ${
-                          !slot.isAvailable
-                            ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
-                            : formData.selectedTime?.slotKey === slot.slotKey
-                              ? 'border-az-purple bg-az-purple/5'
-                              : 'border-gray-200 hover:border-az-blue'
-                        }`}
-                        whileHover={!isMobile && slot.isAvailable ? { scale: 1.02 } : {}}
-                        whileTap={slot.isAvailable ? { scale: 0.98 } : {}}
-                      >
-                        <span className={`font-bold ${slot.isAvailable ? 'text-gray-900' : 'text-gray-300'}`}>
-                          {slot.displayTime}
-                        </span>
-                        {!slot.isAvailable && (
-                          <span className="text-xs text-gray-400 block">{t.taken}</span>
-                        )}
-                      </motion.button>
-                    ))}
-                  </div>
-                  <div className="flex justify-between mt-8">
-                    <button onClick={prevStep} className="text-gray-500 font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined">arrow_back</span> {t.back}
-                    </button>
-                    <button
-                      onClick={() => {
-                        updateForm('selectedDate', null);
-                        prevStep();
-                      }}
-                      className="text-az-blue font-bold text-sm"
-                    >
-                      {t.changeDate}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Step 7: Confirmation */}
+              {/* Step 8: Confirmation */}
               {step === 8 && (
                 <motion.div
                   key="confirm"

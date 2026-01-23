@@ -15,10 +15,12 @@ export default function Admin() {
   const [error, setError] = useState('');
   const [bookings, setBookings] = useState([]);
   const [legacySlots, setLegacySlots] = useState([]);
+  const [volunteers, setVolunteers] = useState([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [actionMessage, setActionMessage] = useState({ type: '', text: '' });
-  const [viewMode, setViewMode] = useState('date'); // 'date' or 'method'
+  const [viewMode, setViewMode] = useState('date'); // 'date', 'method', or 'volunteer'
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showVolunteerModal, setShowVolunteerModal] = useState(null); // volunteer id to show
   const [newBooking, setNewBooking] = useState({
     date: '',
     time: '',
@@ -52,6 +54,7 @@ export default function Admin() {
       const data = await response.json();
       setBookings(data.bookings || []);
       setLegacySlots(data.bookedSlots || []);
+      setVolunteers(data.volunteers || []);
     } catch (err) {
       console.error('Error fetching slots:', err);
     } finally {
@@ -324,6 +327,29 @@ export default function Admin() {
     discord: groupedByMethod.discord?.length || 0,
   };
 
+  // Group bookings by volunteer
+  const groupedByVolunteer = bookings.reduce((acc, booking) => {
+    const volunteerId = booking.assignedVolunteer || 'unassigned';
+    if (!acc[volunteerId]) acc[volunteerId] = [];
+    acc[volunteerId].push(booking);
+    return acc;
+  }, {});
+
+  // Count bookings per volunteer
+  const volunteerCounts = volunteers.reduce((acc, v) => {
+    acc[v.id] = groupedByVolunteer[v.id]?.length || 0;
+    return acc;
+  }, {});
+
+  // Format volunteer availability time
+  const formatAvailTime = (hour) => {
+    const h = Math.floor(hour);
+    const m = (hour - h) * 60;
+    const period = h >= 12 ? 'PM' : 'AM';
+    const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
+    return m > 0 ? `${displayH}:${m.toString().padStart(2, '0')} ${period}` : `${displayH} ${period}`;
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 flex items-center justify-center p-4">
@@ -431,6 +457,14 @@ export default function Admin() {
                   }`}
                 >
                   Contact Method
+                </button>
+                <button
+                  onClick={() => setViewMode('volunteer')}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                    viewMode === 'volunteer' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'
+                  }`}
+                >
+                  Volunteer
                 </button>
               </div>
             </div>
@@ -601,6 +635,11 @@ export default function Admin() {
                                 {formatTime(booking.slotKey.split('-')[3])}
                                 {booking.contactInfo && ` - ${booking.contactInfo}`}
                               </div>
+                              {booking.assignedVolunteerName && (
+                                <div className="text-xs text-az-purple font-medium mt-1">
+                                  Volunteer: {booking.assignedVolunteerName}
+                                </div>
+                              )}
                             </div>
                           </div>
                           <button
@@ -615,7 +654,7 @@ export default function Admin() {
                   </div>
                 ))}
             </div>
-          ) : (
+          ) : viewMode === 'method' ? (
             // View by Contact Method
             <div className="divide-y">
               {['phone', 'zoom', 'discord'].map((method) => {
@@ -642,6 +681,11 @@ export default function Admin() {
                               {formatSlot(booking.slotKey)}
                               {booking.contactInfo && ` - ${booking.contactInfo}`}
                             </div>
+                            {booking.assignedVolunteerName && (
+                              <div className="text-xs text-az-purple font-medium mt-1">
+                                Volunteer: {booking.assignedVolunteerName}
+                              </div>
+                            )}
                           </div>
                           <button
                             onClick={() => handleRemoveBooking(booking.slotKey)}
@@ -656,8 +700,106 @@ export default function Admin() {
                 );
               })}
             </div>
+          ) : (
+            // View by Volunteer
+            <div className="divide-y">
+              {volunteers.map((volunteer) => {
+                const volunteerBookings = groupedByVolunteer[volunteer.id] || [];
+                return (
+                  <div key={volunteer.id} className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-az-purple/10 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-sm text-az-purple">person</span>
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900">{volunteer.name}</h3>
+                          <span className="text-xs text-gray-500">{volunteerBookings.length} booking{volunteerBookings.length !== 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShowVolunteerModal(volunteer.id)}
+                        className="text-sm text-az-blue hover:text-az-purple font-medium"
+                      >
+                        View Availability
+                      </button>
+                    </div>
+                    {volunteerBookings.length > 0 ? (
+                      <div className="space-y-2">
+                        {volunteerBookings.sort((a, b) => a.slotKey.localeCompare(b.slotKey)).map((booking) => (
+                          <div
+                            key={booking.id || booking.slotKey}
+                            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getMethodColor(booking.contactMethod)}`}>
+                                <span className="material-symbols-outlined text-sm">{getMethodIcon(booking.contactMethod)}</span>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900">{booking.name || 'Unknown'}</div>
+                                <div className="text-sm text-gray-500">
+                                  {formatSlot(booking.slotKey)}
+                                  {booking.contactInfo && ` - ${booking.contactInfo}`}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveBooking(booking.slotKey)}
+                              className="px-3 py-1 text-red-600 hover:bg-red-50 rounded font-medium text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">No bookings assigned yet</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
+
+        {/* Volunteer Availability Modal */}
+        {showVolunteerModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <motion.div
+              className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-auto"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              {(() => {
+                const volunteer = volunteers.find(v => v.id === showVolunteerModal);
+                if (!volunteer) return null;
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-xl font-bold text-gray-900">{volunteer.name}'s Availability</h2>
+                      <button
+                        onClick={() => setShowVolunteerModal(null)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {volunteer.availability.map((slot) => (
+                        <div key={slot.date} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <span className="font-medium text-gray-900">{formatDate(slot.date)}</span>
+                          <span className="text-sm text-gray-600">
+                            {formatAvailTime(slot.start)} - {formatAvailTime(slot.end)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </motion.div>
+          </div>
+        )}
 
         {/* Legacy slots notice */}
         {legacySlots.length > bookings.length && (

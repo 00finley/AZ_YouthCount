@@ -2,6 +2,14 @@
 // Uses Redis for persistent storage
 
 import { createClient } from 'redis';
+import {
+  VOLUNTEERS,
+  isVolunteerAvailable,
+  getAvailableVolunteers,
+  isSlotAvailable,
+  selectVolunteer,
+  getVolunteerSummary,
+} from './volunteerConfig.js';
 
 // Configuration
 const CONFIG = {
@@ -81,6 +89,68 @@ function getMaxSlots(dateStr) {
   return date >= CONFIG.DOUBLE_SLOTS_START ? CONFIG.SLOTS_FROM_FEB_6 : CONFIG.SLOTS_BEFORE_FEB_6;
 }
 
+// Generate available slots based on volunteer availability
+function generateAvailableSlots(existingBookings) {
+  const slots = {};
+  const START_HOUR = 6;
+  const END_HOUR = 18;
+
+  // Generate dates from COUNT_START to COUNT_END
+  let current = new Date(CONFIG.COUNT_START);
+  while (current <= CONFIG.COUNT_END) {
+    const dayOfWeek = current.getDay();
+    // Skip weekends
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      const year = current.getFullYear();
+      const month = (current.getMonth() + 1).toString().padStart(2, '0');
+      const day = current.getDate().toString().padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      slots[dateStr] = [];
+
+      // Generate time slots
+      for (let hour = START_HOUR; hour < END_HOUR; hour++) {
+        for (let minute = 0; minute < 60; minute += 30) {
+          const hourDecimal = hour + minute / 60;
+          const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+          const slotKey = `${dateStr}-${timeStr}`;
+
+          // Check if any volunteer is available for this slot
+          const hasVolunteer = isSlotAvailable(dateStr, hourDecimal);
+
+          // Check how many bookings exist for this slot
+          const bookingCount = existingBookings.filter(b => b.slotKey === slotKey).length;
+
+          // Get available volunteers for this slot (for phone/zoom)
+          const availableVolunteers = [];
+          for (const [id, volunteer] of Object.entries(VOLUNTEERS)) {
+            if (isVolunteerAvailable(id, dateStr, hourDecimal)) {
+              // Check if this volunteer is already booked at this time
+              const volunteerBooked = existingBookings.some(
+                b => b.slotKey === slotKey && b.assignedVolunteer === id
+              );
+              if (!volunteerBooked) {
+                availableVolunteers.push(id);
+              }
+            }
+          }
+
+          slots[dateStr].push({
+            time: timeStr,
+            slotKey,
+            hasVolunteer,
+            availableVolunteerCount: availableVolunteers.length,
+            isAvailable: availableVolunteers.length > 0,
+          });
+        }
+      }
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  return slots;
+}
+
 // Get booked slots from Redis (legacy - just slot keys)
 async function getBookedSlots() {
   try {
@@ -141,18 +211,22 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // GET - Return all booked slots
+  // GET - Return all booked slots and volunteer availability
   if (req.method === 'GET') {
     const bookedSlots = await getBookedSlots();
+    const bookings = await getBookingsV2();
 
-    // Check if admin is requesting full booking data
+    // Generate available slots based on volunteer availability
+    const availableSlots = generateAvailableSlots(bookings);
+
+    // Check if admin is requesting full data
     const adminSecret = req.headers['x-admin-secret'];
     if (adminSecret === CONFIG.ADMIN_SECRET) {
-      const bookings = await getBookingsV2();
-      return res.status(200).json({ bookedSlots, bookings });
+      const volunteers = getVolunteerSummary();
+      return res.status(200).json({ bookedSlots, bookings, availableSlots, volunteers });
     }
 
-    return res.status(200).json({ bookedSlots });
+    return res.status(200).json({ bookedSlots, availableSlots });
   }
 
   // POST - Book a new slot
@@ -167,45 +241,82 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid slot key' });
     }
 
+    if (!contactMethod) {
+      return res.status(400).json({ error: 'Contact method is required' });
+    }
+
     // Verify reCAPTCHA
     const isValidRecaptcha = await verifyRecaptcha(recaptchaToken);
     if (!isValidRecaptcha) {
       return res.status(400).json({ error: 'reCAPTCHA verification failed' });
     }
 
-    // Get current slots
-    const bookedSlots = await getBookedSlots();
-
-    // Check slot availability
+    // Parse slot key for date and time
     const dateStr = slotKey.substring(0, 10);
-    const maxSlots = getMaxSlots(dateStr);
-    const currentBookings = bookedSlots.filter(s => s === slotKey).length;
+    const timeStr = slotKey.substring(11);
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const hourDecimal = hours + minutes / 60;
 
-    if (currentBookings >= maxSlots) {
-      return res.status(400).json({ error: 'Slot is already fully booked' });
+    // Get existing bookings
+    const bookings = await getBookingsV2();
+
+    // For phone/zoom, we need to assign a volunteer
+    let assignedVolunteer = null;
+    let assignedVolunteerName = null;
+
+    if (contactMethod === 'phone' || contactMethod === 'zoom') {
+      // Find available volunteers for this slot
+      const availableVolunteers = getAvailableVolunteers(dateStr, hourDecimal, contactMethod);
+
+      // Filter out volunteers already booked at this time
+      const unbookedVolunteers = availableVolunteers.filter(v => {
+        return !bookings.some(b => b.slotKey === slotKey && b.assignedVolunteer === v.id);
+      });
+
+      if (unbookedVolunteers.length === 0) {
+        return res.status(400).json({ error: 'No volunteers available for this time slot' });
+      }
+
+      // Select volunteer equitably
+      const selected = selectVolunteer(dateStr, hourDecimal, contactMethod, bookings);
+      if (selected && unbookedVolunteers.some(v => v.id === selected.id)) {
+        assignedVolunteer = selected.id;
+        assignedVolunteerName = selected.name;
+      } else {
+        // Fallback to first available
+        assignedVolunteer = unbookedVolunteers[0].id;
+        assignedVolunteerName = unbookedVolunteers[0].name;
+      }
+    } else if (contactMethod === 'discord') {
+      // Discord bookings don't have volunteer assignment yet
+      assignedVolunteer = null;
+      assignedVolunteerName = 'Peer Call (TBD)';
     }
 
     // Book the slot (legacy)
+    const bookedSlots = await getBookedSlots();
     bookedSlots.push(slotKey);
     await saveBookedSlots(bookedSlots);
 
-    // Also save to v2 with person info
-    const bookings = await getBookingsV2();
-    bookings.push({
+    // Save to v2 with person info and volunteer assignment
+    const newBooking = {
       id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
       slotKey,
       name: name || 'Unknown',
       contactMethod: contactMethod || 'unknown',
       contactInfo: contactInfo || '',
+      assignedVolunteer,
+      assignedVolunteerName,
       bookedAt: new Date().toISOString(),
-    });
+    };
+    bookings.push(newBooking);
     await saveBookingsV2(bookings);
 
     return res.status(200).json({
       success: true,
       message: 'Slot booked successfully',
       slotKey,
-      spotsRemaining: maxSlots - currentBookings - 1,
+      assignedVolunteer: assignedVolunteerName,
     });
   }
 
@@ -257,28 +368,53 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid slot key' });
       }
 
-      // Check slot availability
-      const bookedSlots = await getBookedSlots();
+      // Parse slot key for date and time
       const dateStr = booking.slotKey.substring(0, 10);
-      const maxSlots = getMaxSlots(dateStr);
-      const currentBookings = bookedSlots.filter(s => s === booking.slotKey).length;
+      const timeStr = booking.slotKey.substring(11);
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      const hourDecimal = hours + minutes / 60;
 
-      if (currentBookings >= maxSlots) {
-        return res.status(400).json({ error: 'Slot is already fully booked' });
+      const existingBookings = await getBookingsV2();
+      const contactMethod = booking.contactMethod || 'phone';
+
+      // Assign volunteer for phone/zoom
+      let assignedVolunteer = booking.assignedVolunteer || null;
+      let assignedVolunteerName = booking.assignedVolunteerName || null;
+
+      if (!assignedVolunteer && (contactMethod === 'phone' || contactMethod === 'zoom')) {
+        const availableVolunteers = getAvailableVolunteers(dateStr, hourDecimal, contactMethod);
+        const unbookedVolunteers = availableVolunteers.filter(v => {
+          return !existingBookings.some(b => b.slotKey === booking.slotKey && b.assignedVolunteer === v.id);
+        });
+
+        if (unbookedVolunteers.length === 0) {
+          return res.status(400).json({ error: 'No volunteers available for this time slot' });
+        }
+
+        const selected = selectVolunteer(dateStr, hourDecimal, contactMethod, existingBookings);
+        if (selected && unbookedVolunteers.some(v => v.id === selected.id)) {
+          assignedVolunteer = selected.id;
+          assignedVolunteerName = selected.name;
+        } else {
+          assignedVolunteer = unbookedVolunteers[0].id;
+          assignedVolunteerName = unbookedVolunteers[0].name;
+        }
       }
 
       // Add to legacy
+      const bookedSlots = await getBookedSlots();
       bookedSlots.push(booking.slotKey);
       await saveBookedSlots(bookedSlots);
 
       // Add to v2
-      const existingBookings = await getBookingsV2();
       existingBookings.push({
         id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
         slotKey: booking.slotKey,
         name: booking.name || 'Admin Added',
-        contactMethod: booking.contactMethod || 'admin',
+        contactMethod,
         contactInfo: booking.contactInfo || '',
+        assignedVolunteer,
+        assignedVolunteerName,
         bookedAt: new Date().toISOString(),
       });
       await saveBookingsV2(existingBookings);
@@ -286,6 +422,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         success: true,
         message: 'Booking added successfully',
+        assignedVolunteer: assignedVolunteerName,
       });
     }
 
