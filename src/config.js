@@ -26,7 +26,7 @@ export const CONFIG = {
   // 2. Register a new site with reCAPTCHA v2 ("I'm not a robot" Checkbox)
   // 3. Copy the site key and paste below
   // NOTE: You need a NEW key for v2 - v3 keys won't work!
-  RECAPTCHA_SITE_KEY: 'YOUR_RECAPTCHA_V2_SITE_KEY',
+  RECAPTCHA_SITE_KEY: '6LdXEVQsAAAAALbHVfTA814ZXca95ulnFeCJwq1t',
 
   // Contact email (displayed on site)
   CONTACT_EMAIL: 'mfinley@azmag.gov',
