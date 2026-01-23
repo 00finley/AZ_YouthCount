@@ -11,6 +11,7 @@ const CONFIG = {
   SLOTS_BEFORE_FEB_6: 1,
   SLOTS_FROM_FEB_6: 2,
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY || '',
+  ADMIN_SECRET: process.env.ADMIN_SECRET || '',
 };
 
 const REDIS_KEY = 'az_youth_count_booked_slots';
@@ -107,8 +108,8 @@ async function saveBookedSlots(slots) {
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Secret');
 
   // Handle preflight
   if (req.method === 'OPTIONS') {
@@ -160,6 +161,52 @@ export default async function handler(req, res) {
       message: 'Slot booked successfully',
       slotKey,
       spotsRemaining: maxSlots - currentBookings - 1,
+    });
+  }
+
+  // PUT - Admin: Set specific slots (replaces all existing)
+  if (req.method === 'PUT') {
+    const adminSecret = req.headers['x-admin-secret'];
+
+    if (!CONFIG.ADMIN_SECRET || adminSecret !== CONFIG.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { slots } = req.body;
+
+    if (!Array.isArray(slots)) {
+      return res.status(400).json({ error: 'Slots must be an array' });
+    }
+
+    // Validate all slots
+    for (const slot of slots) {
+      if (!isValidSlot(slot)) {
+        return res.status(400).json({ error: `Invalid slot: ${slot}` });
+      }
+    }
+
+    await saveBookedSlots(slots);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Slots updated successfully',
+      slots,
+    });
+  }
+
+  // DELETE - Admin: Clear all slots
+  if (req.method === 'DELETE') {
+    const adminSecret = req.headers['x-admin-secret'];
+
+    if (!CONFIG.ADMIN_SECRET || adminSecret !== CONFIG.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    await saveBookedSlots([]);
+
+    return res.status(200).json({
+      success: true,
+      message: 'All slots cleared',
     });
   }
 
