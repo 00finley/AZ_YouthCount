@@ -5,14 +5,14 @@
   "redirects": [
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "www.azyouthcount.org" }],
-      "destination": "https://azyouthcount.org/:path*",
+      "has": [{ "type": "host", "value": "azyouthcount.org" }],
+      "destination": "https://www.azyouthcount.org/:path*",
       "permanent": true
     },
     {
       "source": "/:path*",
       "has": [{ "type": "host", "value": "az-youth-count.vercel.app" }],
-      "destination": "https://azyouthcount.org/:path*",
+      "destination": "https://www.azyouthcount.org/:path*",
       "permanent": true
     }
   ],
