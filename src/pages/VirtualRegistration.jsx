@@ -402,6 +402,8 @@ export default function VirtualRegistration() {
 
   // Track if reCAPTCHA widget has been rendered
   const [recaptchaWidgetId, setRecaptchaWidgetId] = useState(null);
+  // Counter to force new reCAPTCHA container on each visit to confirmation step
+  const [recaptchaKey, setRecaptchaKey] = useState(0);
 
   // New step order:
   // 0: Welcome, 1: Age, 2: Name, 3: Language, 4: Date, 5: Time, 6: Contact Method, 7: Contact Details, 8: Confirm
@@ -410,13 +412,15 @@ export default function VirtualRegistration() {
   // Reset reCAPTCHA state when leaving confirmation step
   useEffect(() => {
     if (step !== CONFIRM_STEP) {
-      // Clear the reCAPTCHA container so it can be re-rendered fresh
-      const container = document.getElementById('recaptcha-container');
-      if (container) {
-        container.innerHTML = '';
-      }
       setRecaptchaWidgetId(null);
       setRecaptchaToken(null);
+    }
+  }, [step]);
+
+  // Increment key when entering confirmation step to force fresh container
+  useEffect(() => {
+    if (step === CONFIRM_STEP) {
+      setRecaptchaKey(k => k + 1);
     }
   }, [step]);
 
@@ -458,7 +462,7 @@ export default function VirtualRegistration() {
       clearInterval(checkInterval);
       clearTimeout(timeoutId);
     };
-  }, [step, recaptchaWidgetId]);
+  }, [step, recaptchaWidgetId, recaptchaKey]);
 
   const handleSubmit = async () => {
     // Bot protection checks
@@ -1308,7 +1312,7 @@ export default function VirtualRegistration() {
 
                   {/* reCAPTCHA v2 Checkbox */}
                   <div className="flex justify-center mb-6">
-                    <div id="recaptcha-container"></div>
+                    <div id="recaptcha-container" key={`recaptcha-${recaptchaKey}`}></div>
                   </div>
                   {!recaptchaToken && (
                     <p className="text-sm text-gray-500 mb-4">Please complete the reCAPTCHA above to continue.</p>
