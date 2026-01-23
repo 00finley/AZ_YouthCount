@@ -409,20 +409,22 @@ export default function VirtualRegistration() {
   // 0: Welcome, 1: Age, 2: Name, 3: Language, 4: Date, 5: Time, 6: Contact Method, 7: Contact Details, 8: Confirm
   const CONFIRM_STEP = 8;
 
-  // Reset reCAPTCHA state when leaving confirmation step
-  useEffect(() => {
-    if (step !== CONFIRM_STEP) {
-      setRecaptchaWidgetId(null);
-      setRecaptchaToken(null);
-    }
-  }, [step]);
+  // Track if we've visited the confirm step (to know when we're leaving it)
+  const [wasOnConfirmStep, setWasOnConfirmStep] = useState(false);
 
-  // Increment key when entering confirmation step to force fresh container
+  // Reset reCAPTCHA state and increment key when leaving confirmation step
+  // This ensures the next visit gets a completely fresh container
   useEffect(() => {
     if (step === CONFIRM_STEP) {
+      setWasOnConfirmStep(true);
+    } else if (wasOnConfirmStep) {
+      // We just left the confirm step - increment key for next visit
       setRecaptchaKey(k => k + 1);
+      setRecaptchaWidgetId(null);
+      setRecaptchaToken(null);
+      setWasOnConfirmStep(false);
     }
-  }, [step]);
+  }, [step, wasOnConfirmStep]);
 
   // Render reCAPTCHA widget when on confirmation step
   useEffect(() => {
@@ -462,7 +464,7 @@ export default function VirtualRegistration() {
       clearInterval(checkInterval);
       clearTimeout(timeoutId);
     };
-  }, [step, recaptchaWidgetId, recaptchaKey]);
+  }, [step, recaptchaWidgetId]);
 
   const handleSubmit = async () => {
     // Bot protection checks
