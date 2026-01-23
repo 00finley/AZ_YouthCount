@@ -11,7 +11,7 @@ const CONFIG = {
   SLOTS_BEFORE_FEB_6: 1,
   SLOTS_FROM_FEB_6: 2,
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY || '',
-  ADMIN_SECRET: process.env.ADMIN_SECRET || '',
+  ADMIN_SECRET: process.env.ADMIN_SECRET || 'LHz*xnrrP8*nq',
 };
 
 const REDIS_KEY = 'az_youth_count_booked_slots';
