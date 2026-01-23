@@ -29,10 +29,16 @@ async function getRedisClient() {
   return redis;
 }
 
-// Verify reCAPTCHA token
+// Verify reCAPTCHA v2 token
 async function verifyRecaptcha(token) {
-  if (!CONFIG.RECAPTCHA_SECRET_KEY || !token) {
+  if (!CONFIG.RECAPTCHA_SECRET_KEY) {
+    console.log('No reCAPTCHA secret key configured, skipping verification');
     return true;
+  }
+
+  if (!token) {
+    console.log('No reCAPTCHA token provided');
+    return false;
   }
 
   try {
@@ -43,7 +49,8 @@ async function verifyRecaptcha(token) {
     });
 
     const data = await response.json();
-    return data.success && data.score >= 0.5;
+    // v2 just returns success: true/false (no score like v3)
+    return data.success === true;
   } catch (error) {
     console.error('reCAPTCHA verification error:', error);
     return false;
