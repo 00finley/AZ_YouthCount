@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Routes, Route, useSearchParams } from 'react-router-dom';
 
 // Main page components
 import Header from './components/Header';
@@ -25,9 +25,34 @@ import VirtualRegistration from './pages/VirtualRegistration';
 // Main landing page
 function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showGeoMessage, setShowGeoMessage] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('restricted') === 'geo') {
+      setShowGeoMessage(true);
+      // Remove the query param from URL
+      searchParams.delete('restricted');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   return (
     <div className="min-h-screen bg-background-light font-display">
+      {showGeoMessage && (
+        <div className="bg-az-orange text-white px-4 py-3 text-center relative">
+          <p className="font-bold">
+            Virtual registration is currently only available to participants in Arizona.
+          </p>
+          <button
+            onClick={() => setShowGeoMessage(false)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80"
+            aria-label="Dismiss"
+          >
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+      )}
       <Header
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
