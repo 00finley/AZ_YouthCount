@@ -407,6 +407,14 @@ export default function VirtualRegistration() {
   // 0: Welcome, 1: Age, 2: Name, 3: Language, 4: Date, 5: Time, 6: Contact Method, 7: Contact Details, 8: Confirm
   const CONFIRM_STEP = 8;
 
+  // Reset reCAPTCHA state when leaving confirmation step
+  useEffect(() => {
+    if (step !== CONFIRM_STEP) {
+      setRecaptchaWidgetId(null);
+      setRecaptchaToken(null);
+    }
+  }, [step]);
+
   // Render reCAPTCHA widget when on confirmation step
   useEffect(() => {
     if (step !== CONFIRM_STEP) return;
@@ -415,6 +423,11 @@ export default function VirtualRegistration() {
     const renderRecaptcha = () => {
       const container = document.getElementById('recaptcha-container');
       if (!container) return;
+
+      // Check if container already has a child (reCAPTCHA already rendered)
+      if (container.hasChildNodes()) {
+        return;
+      }
 
       try {
         const widgetId = window.grecaptcha.render(container, {
