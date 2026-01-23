@@ -197,6 +197,7 @@ export default function VirtualRegistration() {
   const [bookedSlots, setBookedSlots] = useState([]);
   const [isCheckingGeo, setIsCheckingGeo] = useState(true);
   const [formLoadTime] = useState(Date.now()); // Track when form loaded for bot detection
+  const [recaptchaToken, setRecaptchaToken] = useState(null); // reCAPTCHA v2 token
 
   // Check if user is in Arizona
   useEffect(() => {
@@ -401,25 +402,29 @@ export default function VirtualRegistration() {
   const nextStep = () => setStep(s => s + 1);
   const prevStep = () => setStep(s => s - 1);
 
-  // Execute reCAPTCHA
-  const executeRecaptcha = async () => {
-    return new Promise((resolve) => {
-      if (window.grecaptcha && window.grecaptcha.ready) {
-        window.grecaptcha.ready(async () => {
-          try {
-            const token = await window.grecaptcha.execute(CONFIG.RECAPTCHA_SITE_KEY, { action: 'submit_registration' });
-            resolve(token);
-          } catch (error) {
-            console.error('reCAPTCHA error:', error);
-            resolve(null);
-          }
-        });
-      } else {
-        // reCAPTCHA not loaded, proceed without it
-        resolve(null);
-      }
-    });
+  // reCAPTCHA v2 callback - called when user completes the checkbox
+  const onRecaptchaChange = (token) => {
+    setRecaptchaToken(token);
   };
+
+  // Render reCAPTCHA widget when on confirmation step
+  useEffect(() => {
+    if (step === 8 && window.grecaptcha && window.grecaptcha.render) {
+      const container = document.getElementById('recaptcha-container');
+      if (container && !container.hasChildNodes()) {
+        try {
+          window.grecaptcha.render('recaptcha-container', {
+            sitekey: CONFIG.RECAPTCHA_SITE_KEY,
+            callback: onRecaptchaChange,
+            'expired-callback': () => setRecaptchaToken(null),
+          });
+        } catch (e) {
+          // Widget might already be rendered
+          console.log('reCAPTCHA render:', e.message);
+        }
+      }
+    }
+  }, [step]);
 
   const handleSubmit = async () => {
     // Bot protection checks
@@ -451,8 +456,12 @@ export default function VirtualRegistration() {
         return;
       }
 
-      // Execute reCAPTCHA
-      const recaptchaToken = await executeRecaptcha();
+      // Check reCAPTCHA v2 was completed
+      if (!recaptchaToken) {
+        alert('Please complete the reCAPTCHA checkbox.');
+        setIsSubmitting(false);
+        return;
+      }
 
       // First, book the slot in the backend
       const slotKey = formData.selectedTime?.slotKey;
@@ -1189,6 +1198,14 @@ export default function VirtualRegistration() {
                     </div>
                   </div>
 
+                  {/* reCAPTCHA v2 Checkbox */}
+                  <div className="flex justify-center mb-6">
+                    <div id="recaptcha-container"></div>
+                  </div>
+                  {!recaptchaToken && (
+                    <p className="text-sm text-gray-500 mb-4">Please complete the reCAPTCHA above to continue.</p>
+                  )}
+
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
                     <button
                       onClick={prevStep}
@@ -1198,9 +1215,9 @@ export default function VirtualRegistration() {
                     </button>
                     <motion.button
                       onClick={handleSubmit}
-                      disabled={isSubmitting}
-                      className="bg-az-purple text-white font-black px-8 py-3 rounded-xl shadow-lg flex items-center justify-center gap-2"
-                      whileHover={!isMobile ? { scale: 1.02 } : {}}
+                      disabled={isSubmitting || !recaptchaToken}
+                      className="bg-az-purple text-white font-black px-8 py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      whileHover={!isMobile && recaptchaToken ? { scale: 1.02 } : {}}
                       whileTap={{ scale: 0.98 }}
                     >
                       {isSubmitting ? (

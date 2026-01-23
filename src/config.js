@@ -20,13 +20,13 @@ export const CONFIG = {
   // 3. Paste below (format: https://formspree.io/f/xxxxxxxx)
   FORMSPREE_ENDPOINT: 'https://formspree.io/f/xbddjlgp',
 
-  // Google reCAPTCHA v3
+  // Google reCAPTCHA v2 (Checkbox - "I'm not a robot")
   // Instructions:
   // 1. Go to https://www.google.com/recaptcha/admin
-  // 2. Register a new site with reCAPTCHA v3
+  // 2. Register a new site with reCAPTCHA v2 ("I'm not a robot" Checkbox)
   // 3. Copy the site key and paste below
-  // 4. Also update the script tag in index.html with the same site key
-  RECAPTCHA_SITE_KEY: '6Ld-P1MsAAAAAFGuG1dVv590YBtN0BpYRtSvI1J6',
+  // NOTE: You need a NEW key for v2 - v3 keys won't work!
+  RECAPTCHA_SITE_KEY: 'YOUR_RECAPTCHA_V2_SITE_KEY',
 
   // Contact email (displayed on site)
   CONTACT_EMAIL: 'mfinley@azmag.gov',
