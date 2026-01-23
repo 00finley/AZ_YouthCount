@@ -403,13 +403,15 @@ export default function VirtualRegistration() {
   const prevStep = () => setStep(s => s - 1);
 
   // reCAPTCHA v2 callback - called when user completes the checkbox
-  const onRecaptchaChange = (token) => {
+  const onRecaptchaChange = useCallback((token) => {
     setRecaptchaToken(token);
-  };
+  }, []);
 
   // Render reCAPTCHA widget when on confirmation step
   useEffect(() => {
-    if (step === 8 && window.grecaptcha && window.grecaptcha.render) {
+    if (step !== 8) return;
+
+    const renderRecaptcha = () => {
       const container = document.getElementById('recaptcha-container');
       if (container && !container.hasChildNodes()) {
         try {
@@ -419,12 +421,29 @@ export default function VirtualRegistration() {
             'expired-callback': () => setRecaptchaToken(null),
           });
         } catch (e) {
-          // Widget might already be rendered
           console.log('reCAPTCHA render:', e.message);
         }
       }
+    };
+
+    // Wait for grecaptcha to be ready
+    if (window.grecaptcha && window.grecaptcha.render) {
+      renderRecaptcha();
+    } else {
+      // Poll for grecaptcha to be available
+      const checkInterval = setInterval(() => {
+        if (window.grecaptcha && window.grecaptcha.render) {
+          clearInterval(checkInterval);
+          renderRecaptcha();
+        }
+      }, 100);
+
+      // Cleanup interval after 10 seconds
+      setTimeout(() => clearInterval(checkInterval), 10000);
+
+      return () => clearInterval(checkInterval);
     }
-  }, [step]);
+  }, [step, onRecaptchaChange]);
 
   const handleSubmit = async () => {
     // Bot protection checks
