@@ -441,6 +441,16 @@ export default function VirtualRegistration() {
     setIsSubmitting(true);
 
     try {
+      // 3. Check rate limit
+      const rateLimitResponse = await fetch('/api/rate-limit', { method: 'POST' });
+      const rateLimitData = await rateLimitResponse.json();
+
+      if (!rateLimitData.allowed) {
+        alert('You have submitted too many registrations. Please try again later.');
+        setIsSubmitting(false);
+        return;
+      }
+
       // Execute reCAPTCHA
       const recaptchaToken = await executeRecaptcha();
 

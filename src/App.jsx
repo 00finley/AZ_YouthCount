@@ -21,6 +21,7 @@ import EmergencyBanner from './components/EmergencyBanner';
 
 // Pages
 import VirtualRegistration from './pages/VirtualRegistration';
+import NotFound from './pages/NotFound';
 
 // Main landing page
 function HomePage() {
@@ -85,6 +86,7 @@ function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/register" element={<VirtualRegistration />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
