@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 
 // Configuration matching slots API
@@ -7,6 +7,17 @@ const COUNT_END = new Date('2026-02-13');
 const DOUBLE_SLOTS_START = new Date('2026-02-06');
 const SLOTS_BEFORE_FEB_6 = 1;
 const SLOTS_FROM_FEB_6 = 2;
+
+// Volunteer colors for calendar display
+const VOLUNTEER_COLORS = {
+  kelly: { bg: 'bg-pink-100', border: 'border-pink-300', text: 'text-pink-800' },
+  joyce: { bg: 'bg-purple-100', border: 'border-purple-300', text: 'text-purple-800' },
+  stephen: { bg: 'bg-blue-100', border: 'border-blue-300', text: 'text-blue-800' },
+  kyle: { bg: 'bg-green-100', border: 'border-green-300', text: 'text-green-800' },
+  matt: { bg: 'bg-yellow-100', border: 'border-yellow-300', text: 'text-yellow-800' },
+  casey: { bg: 'bg-orange-100', border: 'border-orange-300', text: 'text-orange-800' },
+  corinn: { bg: 'bg-teal-100', border: 'border-teal-300', text: 'text-teal-800' },
+};
 
 export default function Admin() {
   const [password, setPassword] = useState('');
@@ -21,6 +32,8 @@ export default function Admin() {
   const [viewMode, setViewMode] = useState('date'); // 'date', 'method', or 'volunteer'
   const [showAddForm, setShowAddForm] = useState(false);
   const [showVolunteerModal, setShowVolunteerModal] = useState(null); // volunteer id to show
+  const [selectedVolunteerCalendar, setSelectedVolunteerCalendar] = useState(null); // volunteer id for calendar view
+  const [calendarWeek, setCalendarWeek] = useState(0); // 0, 1, 2 for the three weeks
   const [newBooking, setNewBooking] = useState({
     date: '',
     time: '',
@@ -341,6 +354,81 @@ export default function Admin() {
     return acc;
   }, {});
 
+  // Calendar weeks - split the count period into weeks
+  const calendarWeeks = useMemo(() => {
+    const weeks = [];
+    let currentDate = new Date(COUNT_START);
+
+    // Week 1: Jan 28-31 (Wed-Fri) - partial week
+    weeks.push({
+      label: 'Week 1 (Jan 28-31)',
+      dates: [],
+    });
+    while (currentDate <= COUNT_END && currentDate.getDate() <= 31 && currentDate.getMonth() === 0) {
+      const dayOfWeek = currentDate.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        weeks[0].dates.push(new Date(currentDate));
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Week 2: Feb 2-6 (Mon-Fri)
+    weeks.push({
+      label: 'Week 2 (Feb 2-6)',
+      dates: [],
+    });
+    while (currentDate <= COUNT_END && currentDate.getDate() <= 6 && currentDate.getMonth() === 1) {
+      const dayOfWeek = currentDate.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        weeks[1].dates.push(new Date(currentDate));
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    // Skip weekend
+    while (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Week 3: Feb 9-13 (Mon-Fri)
+    weeks.push({
+      label: 'Week 3 (Feb 9-13)',
+      dates: [],
+    });
+    while (currentDate <= COUNT_END) {
+      const dayOfWeek = currentDate.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        weeks[2].dates.push(new Date(currentDate));
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return weeks;
+  }, []);
+
+  // Get volunteer's availability for calendar rendering
+  const getVolunteerAvailabilityForCalendar = (volunteerId) => {
+    const volunteer = volunteers.find(v => v.id === volunteerId);
+    if (!volunteer) return {};
+
+    const availMap = {};
+    for (const slot of volunteer.availability) {
+      availMap[slot.date] = { start: slot.start, end: slot.end };
+    }
+    return availMap;
+  };
+
+  // Get bookings for a volunteer on a specific date/time
+  const getBookingsForSlot = (volunteerId, dateStr, hour) => {
+    return bookings.filter(b => {
+      if (b.assignedVolunteer !== volunteerId) return false;
+      const parts = b.slotKey.split('-');
+      const bookingDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
+      const bookingTime = parts[3];
+      const [bookingHour] = bookingTime.split(':').map(Number);
+      return bookingDate === dateStr && bookingHour === hour;
+    });
+  };
+
   // Format volunteer availability time
   const formatAvailTime = (hour) => {
     const h = Math.floor(hour);
@@ -465,6 +553,14 @@ export default function Admin() {
                   }`}
                 >
                   Volunteer
+                </button>
+                <button
+                  onClick={() => setViewMode('calendar')}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                    viewMode === 'calendar' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'
+                  }`}
+                >
+                  Calendar
                 </button>
               </div>
             </div>
@@ -700,7 +796,7 @@ export default function Admin() {
                 );
               })}
             </div>
-          ) : (
+          ) : viewMode === 'volunteer' ? (
             // View by Volunteer
             <div className="divide-y">
               {volunteers.map((volunteer) => {
@@ -758,6 +854,160 @@ export default function Admin() {
                   </div>
                 );
               })}
+            </div>
+          ) : (
+            // Calendar View
+            <div className="p-4">
+              {/* Volunteer Selector */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Volunteer</label>
+                <div className="flex flex-wrap gap-2">
+                  {volunteers.map((volunteer) => {
+                    const colors = VOLUNTEER_COLORS[volunteer.id] || { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-800' };
+                    const isSelected = selectedVolunteerCalendar === volunteer.id;
+                    return (
+                      <button
+                        key={volunteer.id}
+                        onClick={() => setSelectedVolunteerCalendar(isSelected ? null : volunteer.id)}
+                        className={`px-3 py-2 rounded-lg border-2 font-medium text-sm transition-all ${
+                          isSelected
+                            ? `${colors.bg} ${colors.border} ${colors.text}`
+                            : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        {volunteer.name}
+                        <span className="ml-1 text-xs opacity-70">({volunteerCounts[volunteer.id] || 0})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Week Navigation */}
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  onClick={() => setCalendarWeek(w => Math.max(0, w - 1))}
+                  disabled={calendarWeek === 0}
+                  className="px-3 py-2 bg-gray-100 rounded-lg disabled:opacity-30"
+                >
+                  <span className="material-symbols-outlined">chevron_left</span>
+                </button>
+                <h3 className="font-bold text-gray-900">{calendarWeeks[calendarWeek]?.label}</h3>
+                <button
+                  onClick={() => setCalendarWeek(w => Math.min(calendarWeeks.length - 1, w + 1))}
+                  disabled={calendarWeek === calendarWeeks.length - 1}
+                  className="px-3 py-2 bg-gray-100 rounded-lg disabled:opacity-30"
+                >
+                  <span className="material-symbols-outlined">chevron_right</span>
+                </button>
+              </div>
+
+              {/* Calendar Grid */}
+              {selectedVolunteerCalendar ? (
+                <div className="border rounded-lg overflow-hidden">
+                  {/* Header row with days */}
+                  <div className="grid bg-gray-50 border-b" style={{ gridTemplateColumns: '60px repeat(5, 1fr)' }}>
+                    <div className="p-2 border-r text-xs font-medium text-gray-500">Time</div>
+                    {calendarWeeks[calendarWeek]?.dates.map((date) => (
+                      <div key={date.toISOString()} className="p-2 border-r last:border-r-0 text-center">
+                        <div className="text-xs text-gray-500">
+                          {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                        </div>
+                        <div className="font-bold text-gray-900">
+                          {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </div>
+                      </div>
+                    ))}
+                    {/* Fill empty columns for partial weeks */}
+                    {Array.from({ length: Math.max(0, 5 - (calendarWeeks[calendarWeek]?.dates.length || 0)) }).map((_, i) => (
+                      <div key={`empty-header-${i}`} className="p-2 border-r last:border-r-0 bg-gray-100"></div>
+                    ))}
+                  </div>
+
+                  {/* Time rows - 6am to 6pm */}
+                  {Array.from({ length: 12 }, (_, i) => i + 6).map((hour) => {
+                    const volunteer = volunteers.find(v => v.id === selectedVolunteerCalendar);
+                    const availability = getVolunteerAvailabilityForCalendar(selectedVolunteerCalendar);
+                    const colors = VOLUNTEER_COLORS[selectedVolunteerCalendar] || { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-800' };
+
+                    return (
+                      <div key={hour} className="grid border-b last:border-b-0" style={{ gridTemplateColumns: '60px repeat(5, 1fr)' }}>
+                        <div className="p-2 border-r text-xs font-medium text-gray-500 flex items-center justify-center">
+                          {hour > 12 ? `${hour - 12}pm` : hour === 12 ? '12pm' : `${hour}am`}
+                        </div>
+                        {calendarWeeks[calendarWeek]?.dates.map((date) => {
+                          const year = date.getFullYear();
+                          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                          const day = date.getDate().toString().padStart(2, '0');
+                          const dateStr = `${year}-${month}-${day}`;
+
+                          const dayAvail = availability[dateStr];
+                          const isAvailable = dayAvail && hour >= dayAvail.start && hour < dayAvail.end;
+                          const slotBookings = getBookingsForSlot(selectedVolunteerCalendar, dateStr, hour);
+
+                          return (
+                            <div
+                              key={date.toISOString()}
+                              className={`p-1 border-r last:border-r-0 min-h-[60px] relative ${
+                                isAvailable ? colors.bg : 'bg-white'
+                              }`}
+                            >
+                              {isAvailable && (
+                                <div className={`absolute inset-1 rounded border-2 border-dashed ${colors.border} opacity-50`}></div>
+                              )}
+                              {slotBookings.map((booking) => (
+                                <div
+                                  key={booking.slotKey}
+                                  className={`relative z-10 p-1.5 mb-1 rounded text-xs shadow-sm border ${
+                                    booking.contactMethod === 'phone'
+                                      ? 'bg-green-50 border-green-200'
+                                      : booking.contactMethod === 'zoom'
+                                        ? 'bg-blue-50 border-blue-200'
+                                        : 'bg-indigo-50 border-indigo-200'
+                                  }`}
+                                >
+                                  <div className="font-medium truncate">{booking.name}</div>
+                                  <div className="flex items-center gap-1 text-gray-500">
+                                    <span className="material-symbols-outlined text-xs">{getMethodIcon(booking.contactMethod)}</span>
+                                    <span className="truncate">{formatTime(booking.slotKey.split('-')[3])}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                        {/* Fill empty columns for partial weeks */}
+                        {Array.from({ length: Math.max(0, 5 - (calendarWeeks[calendarWeek]?.dates.length || 0)) }).map((_, i) => (
+                          <div key={`empty-${hour}-${i}`} className="p-1 border-r last:border-r-0 min-h-[60px] bg-gray-50"></div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <span className="material-symbols-outlined text-4xl text-gray-300 mb-2">person</span>
+                  <p className="text-gray-500">Select a volunteer above to view their calendar</p>
+                </div>
+              )}
+
+              {/* Legend */}
+              {selectedVolunteerCalendar && (
+                <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-4 h-4 rounded border-2 border-dashed ${VOLUNTEER_COLORS[selectedVolunteerCalendar]?.border || 'border-gray-300'} ${VOLUNTEER_COLORS[selectedVolunteerCalendar]?.bg || 'bg-gray-100'}`}></div>
+                    <span className="text-gray-600">Available</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-green-50 border border-green-200"></div>
+                    <span className="text-gray-600">Phone booking</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-blue-50 border border-blue-200"></div>
+                    <span className="text-gray-600">Zoom booking</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
