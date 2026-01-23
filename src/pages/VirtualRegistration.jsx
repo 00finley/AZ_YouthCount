@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { CONFIG } from '../config';
 import {
   formatDateDisplay,
@@ -172,6 +172,7 @@ const mobilePageVariants = {
 
 export default function VirtualRegistration() {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -180,6 +181,29 @@ export default function VirtualRegistration() {
   const [isLoadingSlots, setIsLoadingSlots] = useState(true);
   const [slotsError, setSlotsError] = useState(null);
   const [bookedSlots, setBookedSlots] = useState([]);
+  const [isCheckingGeo, setIsCheckingGeo] = useState(true);
+
+  // Check if user is in Arizona
+  useEffect(() => {
+    const checkGeo = async () => {
+      try {
+        const response = await fetch('/api/geo-check');
+        const data = await response.json();
+
+        if (!data.allowed) {
+          // Redirect to home page with restricted message
+          navigate('/?restricted=geo', { replace: true });
+        }
+      } catch (error) {
+        // On error, allow access (don't block on API failure)
+        console.error('Geo check failed:', error);
+      } finally {
+        setIsCheckingGeo(false);
+      }
+    };
+
+    checkGeo();
+  }, [navigate]);
 
   const [formData, setFormData] = useState({
     preferredName: '',
@@ -499,6 +523,18 @@ export default function VirtualRegistration() {
             {t.backToSite}
           </Link>
         </motion.div>
+      </div>
+    );
+  }
+
+  // Show loading while checking geolocation
+  if (isCheckingGeo) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-white/20 border-t-white mx-auto mb-4"></div>
+          <p className="text-white/60">Loading...</p>
+        </div>
       </div>
     );
   }
