@@ -7,26 +7,25 @@ export default function handler(request) {
   const country = request.headers.get('x-vercel-ip-country') || '';
   const region = request.headers.get('x-vercel-ip-region') || '';
 
-  // Check if user is in Arizona
-  const isArizona = country === 'US' && region === 'AZ';
+  // Only block if we're certain they're NOT in Arizona
+  // If we have US country code but region is not AZ, block
+  // Otherwise allow (including when geo data is unavailable)
+  const isDefinitelyNotArizona = country === 'US' && region && region !== 'AZ';
 
-  // Allow in development (no geo headers)
-  const isDevelopment = !country && !region;
-
-  const allowed = isArizona || isDevelopment;
+  const allowed = !isDefinitelyNotArizona;
 
   return new Response(
     JSON.stringify({
       allowed,
       country,
       region,
-      debug: isDevelopment ? 'development mode' : `${country}-${region}`,
+      debug: `${country}-${region}`,
     }),
     {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
       },
     }
   );
