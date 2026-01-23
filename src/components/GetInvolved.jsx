@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { CONFIG } from '../config';
 
@@ -26,35 +26,53 @@ export default function GetInvolved() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState(null);
+  const [recaptchaWidgetId, setRecaptchaWidgetId] = useState(null);
 
-  // Execute reCAPTCHA
-  const executeRecaptcha = async () => {
-    return new Promise((resolve) => {
-      if (window.grecaptcha && window.grecaptcha.ready) {
-        window.grecaptcha.ready(async () => {
-          try {
-            const token = await window.grecaptcha.execute(CONFIG.RECAPTCHA_SITE_KEY, { action: 'submit_partner_inquiry' });
-            resolve(token);
-          } catch (error) {
-            console.error('reCAPTCHA error:', error);
-            resolve(null);
-          }
+  // Render reCAPTCHA v2 widget
+  useEffect(() => {
+    // Don't render if already rendered or form is submitted
+    if (recaptchaWidgetId !== null || isSubmitted) return;
+
+    const renderRecaptcha = () => {
+      const container = document.getElementById('partner-recaptcha-container');
+      if (!container) return;
+
+      try {
+        const widgetId = window.grecaptcha.render(container, {
+          sitekey: CONFIG.RECAPTCHA_SITE_KEY,
+          callback: (token) => setRecaptchaToken(token),
+          'expired-callback': () => setRecaptchaToken(null),
         });
-      } else {
-        // reCAPTCHA not loaded, proceed without it
-        resolve(null);
+        setRecaptchaWidgetId(widgetId);
+      } catch (e) {
+        console.log('reCAPTCHA render error:', e.message);
       }
-    });
-  };
+    };
+
+    // Poll for grecaptcha to be available
+    const checkInterval = setInterval(() => {
+      if (window.grecaptcha && window.grecaptcha.render) {
+        clearInterval(checkInterval);
+        setTimeout(renderRecaptcha, 100);
+      }
+    }, 200);
+
+    return () => clearInterval(checkInterval);
+  }, [recaptchaWidgetId, isSubmitted]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Check reCAPTCHA
+    if (!recaptchaToken) {
+      alert('Please complete the reCAPTCHA verification.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // Execute reCAPTCHA
-      const recaptchaToken = await executeRecaptcha();
-
       const response = await fetch(CONFIG.FORMSPREE_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -70,6 +88,9 @@ export default function GetInvolved() {
       if (response.ok) {
         setIsSubmitted(true);
         setFormData({ organization: '', contact: '', email: '', interest: 'Host a Magnet Site' });
+        // Reset reCAPTCHA state for next submission
+        setRecaptchaToken(null);
+        setRecaptchaWidgetId(null);
       }
     } catch (error) {
       console.error('Form submission error:', error);
@@ -227,12 +248,22 @@ export default function GetInvolved() {
                   </select>
                 </div>
 
+                {/* reCAPTCHA v2 widget */}
+                <div className="flex justify-center py-2">
+                  <div id="partner-recaptcha-container"></div>
+                </div>
+                {!recaptchaToken && (
+                  <p className="text-xs text-gray-500 text-center">
+                    Please complete the reCAPTCHA above to submit
+                  </p>
+                )}
+
                 <motion.button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !recaptchaToken}
                   className="w-full py-4 mt-2 bg-az-purple text-white font-black uppercase tracking-widest rounded-xl hover:bg-purple-800 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                  whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
-                  whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
+                  whileHover={{ scale: (isSubmitting || !recaptchaToken) ? 1 : 1.02 }}
+                  whileTap={{ scale: (isSubmitting || !recaptchaToken) ? 1 : 0.98 }}
                 >
                   {isSubmitting ? (
                     <span className="flex items-center justify-center gap-2">
@@ -252,7 +283,7 @@ export default function GetInvolved() {
 
                 {/* reCAPTCHA notice */}
                 <p className="text-xs text-gray-400 text-center mt-4">
-                  This site is protected by reCAPTCHA and the Google{' '}
+                  This form is protected by reCAPTCHA and the Google{' '}
                   <a href="https://policies.google.com/privacy" className="underline">Privacy Policy</a> and{' '}
                   <a href="https://policies.google.com/terms" className="underline">Terms of Service</a> apply.
                 </p>
