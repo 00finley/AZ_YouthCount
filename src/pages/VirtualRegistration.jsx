@@ -402,48 +402,48 @@ export default function VirtualRegistration() {
   const nextStep = () => setStep(s => s + 1);
   const prevStep = () => setStep(s => s - 1);
 
-  // reCAPTCHA v2 callback - called when user completes the checkbox
-  const onRecaptchaChange = useCallback((token) => {
-    setRecaptchaToken(token);
-  }, []);
+  // Track if reCAPTCHA widget has been rendered
+  const [recaptchaWidgetId, setRecaptchaWidgetId] = useState(null);
 
   // Render reCAPTCHA widget when on confirmation step
   useEffect(() => {
     if (step !== 8) return;
+    if (recaptchaWidgetId !== null) return; // Already rendered
 
     const renderRecaptcha = () => {
       const container = document.getElementById('recaptcha-container');
-      if (container && !container.hasChildNodes()) {
-        try {
-          window.grecaptcha.render('recaptcha-container', {
-            sitekey: CONFIG.RECAPTCHA_SITE_KEY,
-            callback: onRecaptchaChange,
-            'expired-callback': () => setRecaptchaToken(null),
-          });
-        } catch (e) {
-          console.log('reCAPTCHA render:', e.message);
-        }
+      if (!container) return;
+
+      try {
+        const widgetId = window.grecaptcha.render(container, {
+          sitekey: CONFIG.RECAPTCHA_SITE_KEY,
+          callback: (token) => setRecaptchaToken(token),
+          'expired-callback': () => setRecaptchaToken(null),
+          'error-callback': () => setRecaptchaToken(null),
+        });
+        setRecaptchaWidgetId(widgetId);
+      } catch (e) {
+        console.log('reCAPTCHA render error:', e.message);
       }
     };
 
-    // Wait for grecaptcha to be ready
-    if (window.grecaptcha && window.grecaptcha.render) {
-      renderRecaptcha();
-    } else {
-      // Poll for grecaptcha to be available
-      const checkInterval = setInterval(() => {
-        if (window.grecaptcha && window.grecaptcha.render) {
-          clearInterval(checkInterval);
-          renderRecaptcha();
-        }
-      }, 100);
+    // Poll for grecaptcha to be available
+    const checkInterval = setInterval(() => {
+      if (window.grecaptcha && window.grecaptcha.render) {
+        clearInterval(checkInterval);
+        // Small delay to ensure DOM is ready
+        setTimeout(renderRecaptcha, 100);
+      }
+    }, 200);
 
-      // Cleanup interval after 10 seconds
-      setTimeout(() => clearInterval(checkInterval), 10000);
+    // Cleanup
+    const timeoutId = setTimeout(() => clearInterval(checkInterval), 15000);
 
-      return () => clearInterval(checkInterval);
-    }
-  }, [step, onRecaptchaChange]);
+    return () => {
+      clearInterval(checkInterval);
+      clearTimeout(timeoutId);
+    };
+  }, [step, recaptchaWidgetId]);
 
   const handleSubmit = async () => {
     // Bot protection checks
