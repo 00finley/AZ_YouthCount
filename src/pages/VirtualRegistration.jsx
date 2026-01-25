@@ -6,6 +6,7 @@ import {
   formatDateDisplay,
   DISCORD_INVITE_LINK
 } from '../slotsConfig';
+import { sendConfirmationEmail } from '../utils/emailjs';
 
 // Spanish translations
 const translations = {
@@ -593,6 +594,20 @@ export default function VirtualRegistration() {
 
       if (response.ok) {
         setIsSubmitted(true);
+
+        // Send confirmation email for Zoom registrants
+        if (formData.contactMethod === 'zoom' && formData.email) {
+          sendConfirmationEmail({
+            toEmail: formData.email,
+            toName: formData.preferredName,
+            appointmentDate: formData.selectedDate ? formatDateDisplay(formData.selectedDate) : '',
+            appointmentTime: formData.selectedTime?.displayTime || '',
+            contactMethod: 'zoom',
+          }).catch((err) => {
+            // Don't fail the registration if email fails
+            console.error('Failed to send confirmation email:', err);
+          });
+        }
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.error('Formspree error:', response.status, errorData);
