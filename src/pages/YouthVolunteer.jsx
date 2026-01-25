@@ -45,6 +45,7 @@ export default function YouthVolunteer() {
   const [selectedWeek, setSelectedWeek] = useState(0);
   const [actionMessage, setActionMessage] = useState({ type: '', text: '' });
   const [isUpdating, setIsUpdating] = useState(false);
+  const [managingUser, setManagingUser] = useState(null); // For admin: which user's availability to manage
 
   // Check session storage for existing auth
   useEffect(() => {
@@ -135,9 +136,12 @@ export default function YouthVolunteer() {
   const handleToggleSlot = async (slotKey) => {
     if (!currentUser || isUpdating) return;
 
+    // Determine which user's availability to modify
+    const targetUsername = (currentUser.isAdmin && managingUser) ? managingUser : currentUser.username;
+
     setIsUpdating(true);
-    const myVolunteer = volunteers.find(v => v.id === currentUser.username);
-    const hasSlot = myVolunteer?.availability?.includes(slotKey);
+    const targetVolunteer = volunteers.find(v => v.id === targetUsername);
+    const hasSlot = targetVolunteer?.availability?.includes(slotKey);
 
     try {
       const token = sessionStorage.getItem('youth_volunteer_token');
@@ -150,7 +154,7 @@ export default function YouthVolunteer() {
         },
         body: JSON.stringify({
           action: hasSlot ? 'removeSlot' : 'addSlot',
-          volunteerId: currentUser.username,
+          volunteerId: targetUsername,
           slotKey,
         }),
       });
@@ -413,14 +417,58 @@ export default function YouthVolunteer() {
                     key={volunteer.id}
                     className={`px-3 py-1 rounded-full text-sm font-medium border ${getVolunteerColor(volunteer.id)} ${
                       volunteer.id === currentUser?.username ? 'ring-2 ring-az-purple ring-offset-1' : ''
-                    }`}
+                    } ${currentUser?.isAdmin && managingUser === volunteer.id ? 'ring-2 ring-az-orange ring-offset-1' : ''}`}
                   >
                     {volunteer.name}
                     {volunteer.id === currentUser?.username && ' (You)'}
+                    {currentUser?.isAdmin && managingUser === volunteer.id && ' (Managing)'}
                   </div>
                 ))}
               </div>
             </div>
+
+            {/* Admin: Manage Other Users */}
+            {currentUser?.isAdmin && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="material-symbols-outlined text-amber-600">admin_panel_settings</span>
+                  <h3 className="font-bold text-amber-900">Admin: Manage User Availability</h3>
+                </div>
+                <p className="text-sm text-amber-700 mb-3">
+                  As an admin, you can edit any volunteer's availability. Select a user below to manage their schedule.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setManagingUser(null)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      !managingUser
+                        ? 'bg-az-purple text-white'
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    My Availability
+                  </button>
+                  {volunteers.filter(v => v.id !== currentUser?.username).map((volunteer) => (
+                    <button
+                      key={volunteer.id}
+                      onClick={() => setManagingUser(volunteer.id)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        managingUser === volunteer.id
+                          ? 'bg-az-orange text-white'
+                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {volunteer.name}
+                    </button>
+                  ))}
+                </div>
+                {managingUser && (
+                  <p className="text-sm text-amber-800 mt-3 font-medium">
+                    Now editing: {volunteers.find(v => v.id === managingUser)?.name}'s availability
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Week Navigation */}
             <div className="bg-white rounded-xl shadow-sm border p-4">
@@ -443,7 +491,9 @@ export default function YouthVolunteer() {
               </div>
 
               <p className="text-sm text-gray-500 mb-4">
-                Click on time slots to toggle your availability. Colored slots show other volunteers' availability.
+                {managingUser && currentUser?.isAdmin
+                  ? `Click on time slots to toggle ${volunteers.find(v => v.id === managingUser)?.name}'s availability.`
+                  : 'Click on time slots to toggle your availability. Colored slots show other volunteers\' availability.'}
               </p>
 
               {/* Calendar Grid */}
@@ -477,8 +527,10 @@ export default function YouthVolunteer() {
                         const slotKey = getSlotKey(date, time);
                         const slotVolunteers = getVolunteersForSlot(slotKey);
                         const booking = getBookingForSlot(slotKey);
+                        // When admin is managing another user, highlight that user's slots
+                        const targetUsername = (currentUser?.isAdmin && managingUser) ? managingUser : currentUser?.username;
+                        const isTargetSlot = slotVolunteers.some(v => v.id === targetUsername);
                         const isMySlot = slotVolunteers.some(v => v.id === currentUser?.username);
-                        const hasOthers = slotVolunteers.some(v => v.id !== currentUser?.username);
 
                         return (
                           <button
@@ -486,7 +538,7 @@ export default function YouthVolunteer() {
                             onClick={() => handleToggleSlot(slotKey)}
                             disabled={isUpdating || booking}
                             className={`p-1 border-r last:border-r-0 min-h-[40px] text-left transition-all hover:bg-gray-50 disabled:cursor-not-allowed ${
-                              isMySlot ? 'bg-az-purple/10' : ''
+                              isTargetSlot ? 'bg-az-purple/10' : ''
                             } ${booking ? 'bg-green-50' : ''}`}
                           >
                             {booking ? (
@@ -500,13 +552,15 @@ export default function YouthVolunteer() {
                                   <div
                                     key={v.id}
                                     className={`w-2 h-2 rounded-full ${
-                                      v.id === currentUser?.username ? 'bg-az-purple' : 'bg-gray-400'
+                                      v.id === targetUsername ? 'bg-az-purple' : v.id === currentUser?.username ? 'bg-az-blue' : 'bg-gray-400'
                                     }`}
                                     title={v.name}
                                   />
                                 ))}
-                                {isMySlot && (
-                                  <span className="text-[10px] text-az-purple font-medium ml-1">You</span>
+                                {isTargetSlot && (
+                                  <span className="text-[10px] text-az-purple font-medium ml-1">
+                                    {managingUser && currentUser?.isAdmin ? volunteers.find(v => v.id === managingUser)?.name?.split(' ')[0] : 'You'}
+                                  </span>
                                 )}
                               </div>
                             )}
