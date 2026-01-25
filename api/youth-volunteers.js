@@ -1,20 +1,25 @@
-import { Redis } from '@upstash/redis';
-
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
+import { createClient } from 'redis';
 
 // Youth volunteer portal password (different from admin)
 const YOUTH_VOLUNTEER_PASSWORD = process.env.YOUTH_VOLUNTEER_PASSWORD || 'YouthBoard2026!';
 
 // Redis keys
 const YOUTH_VOLUNTEERS_KEY = 'youth_volunteers'; // Hash: volunteerId -> { name, availability: [...] }
-const DISCORD_BOOKINGS_KEY = 'discord_bookings'; // List of discord bookings
+const BOOKINGS_KEY = 'az_youth_count_bookings_v2'; // Same key as slots API
 
-// Count period
-const COUNT_START = new Date('2026-01-28');
-const COUNT_END = new Date('2026-02-13');
+// Create Redis client
+let redis = null;
+
+async function getRedisClient() {
+  if (!redis) {
+    redis = createClient({
+      url: process.env.REDIS_URL || process.env.KV_URL,
+    });
+    redis.on('error', (err) => console.error('Redis Client Error', err));
+    await redis.connect();
+  }
+  return redis;
+}
 
 export default async function handler(req, res) {
   // CORS headers
@@ -32,17 +37,20 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
+      const client = await getRedisClient();
+
       // Get all youth volunteers
-      const volunteers = await redis.hgetall(YOUTH_VOLUNTEERS_KEY) || {};
+      const volunteersData = await client.hGetAll(YOUTH_VOLUNTEERS_KEY) || {};
 
       // Get all bookings to find Discord ones
-      const bookingsData = await redis.get('bookings') || [];
-      const discordBookings = bookingsData.filter(b => b.contactMethod === 'discord');
+      const bookingsRaw = await client.get(BOOKINGS_KEY);
+      const bookingsData = bookingsRaw ? JSON.parse(bookingsRaw) : [];
+      const discordBookings = Array.isArray(bookingsData) ? bookingsData.filter(b => b.contactMethod === 'discord') : [];
 
       // If authenticated, return full data; otherwise just availability overview
       if (isAuthenticated) {
         // Parse volunteer data
-        const volunteerList = Object.entries(volunteers).map(([id, data]) => {
+        const volunteerList = Object.entries(volunteersData).map(([id, data]) => {
           const parsed = typeof data === 'string' ? JSON.parse(data) : data;
           // Get bookings assigned to this volunteer
           const assignedBookings = discordBookings.filter(b => b.assignedVolunteer === id);
@@ -80,6 +88,8 @@ export default async function handler(req, res) {
     const { action, volunteerId, name, availability, slotKey } = req.body;
 
     try {
+      const client = await getRedisClient();
+
       if (action === 'register' || action === 'updateAvailability') {
         // Register new volunteer or update availability
         if (!volunteerId || !name) {
@@ -87,7 +97,7 @@ export default async function handler(req, res) {
         }
 
         // Get existing data
-        const existingData = await redis.hget(YOUTH_VOLUNTEERS_KEY, volunteerId);
+        const existingData = await client.hGet(YOUTH_VOLUNTEERS_KEY, volunteerId);
         const existing = existingData ? (typeof existingData === 'string' ? JSON.parse(existingData) : existingData) : null;
 
         const volunteerData = {
@@ -97,7 +107,7 @@ export default async function handler(req, res) {
           updatedAt: new Date().toISOString(),
         };
 
-        await redis.hset(YOUTH_VOLUNTEERS_KEY, { [volunteerId]: JSON.stringify(volunteerData) });
+        await client.hSet(YOUTH_VOLUNTEERS_KEY, volunteerId, JSON.stringify(volunteerData));
 
         return res.status(200).json({ success: true, volunteer: { id: volunteerId, ...volunteerData } });
       }
@@ -108,7 +118,7 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: 'Volunteer ID and slot key required' });
         }
 
-        const existingData = await redis.hget(YOUTH_VOLUNTEERS_KEY, volunteerId);
+        const existingData = await client.hGet(YOUTH_VOLUNTEERS_KEY, volunteerId);
         if (!existingData) {
           return res.status(404).json({ error: 'Volunteer not found' });
         }
@@ -119,7 +129,7 @@ export default async function handler(req, res) {
         if (!volunteer.availability.includes(slotKey)) {
           volunteer.availability.push(slotKey);
           volunteer.updatedAt = new Date().toISOString();
-          await redis.hset(YOUTH_VOLUNTEERS_KEY, { [volunteerId]: JSON.stringify(volunteer) });
+          await client.hSet(YOUTH_VOLUNTEERS_KEY, volunteerId, JSON.stringify(volunteer));
         }
 
         return res.status(200).json({ success: true, volunteer: { id: volunteerId, ...volunteer } });
@@ -131,7 +141,7 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: 'Volunteer ID and slot key required' });
         }
 
-        const existingData = await redis.hget(YOUTH_VOLUNTEERS_KEY, volunteerId);
+        const existingData = await client.hGet(YOUTH_VOLUNTEERS_KEY, volunteerId);
         if (!existingData) {
           return res.status(404).json({ error: 'Volunteer not found' });
         }
@@ -141,7 +151,7 @@ export default async function handler(req, res) {
         // Remove slot
         volunteer.availability = volunteer.availability.filter(s => s !== slotKey);
         volunteer.updatedAt = new Date().toISOString();
-        await redis.hset(YOUTH_VOLUNTEERS_KEY, { [volunteerId]: JSON.stringify(volunteer) });
+        await client.hSet(YOUTH_VOLUNTEERS_KEY, volunteerId, JSON.stringify(volunteer));
 
         return res.status(200).json({ success: true, volunteer: { id: volunteerId, ...volunteer } });
       }
