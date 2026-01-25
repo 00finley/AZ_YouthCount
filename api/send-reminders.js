@@ -169,8 +169,11 @@ export default async function handler(req, res) {
     const errors = [];
 
     for (const booking of bookings) {
-      // Skip if no email (phone/discord bookings)
-      if (booking.contactMethod !== 'zoom' || !booking.contactInfo) {
+      // Determine email to use: reminderEmail (for phone/discord) or contactInfo (for zoom)
+      const emailToUse = booking.reminderEmail || (booking.contactMethod === 'zoom' ? booking.contactInfo : null);
+
+      // Skip if no email available
+      if (!emailToUse) {
         continue;
       }
 
@@ -186,7 +189,7 @@ export default async function handler(req, res) {
         // Send reminder
         const { date, time } = parseSlotKey(booking.slotKey);
         const result = await sendReminderEmail({
-          toEmail: booking.contactInfo,
+          toEmail: emailToUse,
           toName: booking.name,
           appointmentDate: formatDate(date),
           appointmentTime: formatTime(time),

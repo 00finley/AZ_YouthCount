@@ -297,7 +297,7 @@ export default async function handler(req, res) {
 
   // POST - Book a new slot
   if (req.method === 'POST') {
-    const { slotKey, recaptchaToken, name, contactMethod, contactInfo } = req.body;
+    const { slotKey, recaptchaToken, name, contactMethod, contactInfo, reminderEmail } = req.body;
 
     if (!slotKey) {
       return res.status(400).json({ error: 'Slot key is required' });
@@ -378,6 +378,7 @@ export default async function handler(req, res) {
       name: name || 'Unknown',
       contactMethod: contactMethod || 'unknown',
       contactInfo: contactInfo || '',
+      reminderEmail: reminderEmail || null, // Optional email for reminders (phone/discord users)
       assignedVolunteer,
       assignedVolunteerName,
       bookedAt: new Date().toISOString(),

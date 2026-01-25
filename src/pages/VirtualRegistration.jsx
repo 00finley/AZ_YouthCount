@@ -231,6 +231,7 @@ export default function VirtualRegistration() {
     contactMethod: '',
     phoneNumber: '',
     email: '',
+    reminderEmail: '', // Optional email for phone/discord users to receive reminders
     discordUsername: '',
     discordConfirmed: false,
     selectedDate: null,
@@ -532,6 +533,11 @@ export default function VirtualRegistration() {
             : formData.discordUsername;
 
         try {
+          // Determine reminder email: use provided email for zoom, or optional reminderEmail for phone/discord
+          const reminderEmail = formData.contactMethod === 'zoom'
+            ? formData.email
+            : formData.reminderEmail || null;
+
           const bookResponse = await fetch('/api/slots', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -541,6 +547,7 @@ export default function VirtualRegistration() {
               name: formData.preferredName,
               contactMethod: formData.contactMethod,
               contactInfo,
+              reminderEmail,
             }),
           });
 
@@ -584,6 +591,7 @@ export default function VirtualRegistration() {
           contactMethod: formData.contactMethod,
           phoneNumber: formData.phoneNumber || 'N/A',
           email: formData.email || 'N/A',
+          reminderEmail: formData.reminderEmail || 'N/A',
           discordUser: formData.contactMethod === 'discord' ? formData.discordUsername : 'N/A',
           appointmentDate: formData.selectedDate ? formatDateDisplay(formData.selectedDate) : '',
           appointmentTime: formData.selectedTime?.displayTime || '',
@@ -595,14 +603,18 @@ export default function VirtualRegistration() {
       if (response.ok) {
         setIsSubmitted(true);
 
-        // Send confirmation email for Zoom registrants
-        if (formData.contactMethod === 'zoom' && formData.email) {
+        // Send confirmation email - to primary email for zoom, or reminder email for phone/discord
+        const emailToSend = formData.contactMethod === 'zoom'
+          ? formData.email
+          : formData.reminderEmail;
+
+        if (emailToSend && isValidEmail(emailToSend)) {
           sendConfirmationEmail({
-            toEmail: formData.email,
+            toEmail: emailToSend,
             toName: formData.preferredName,
             appointmentDate: formData.selectedDate ? formatDateDisplay(formData.selectedDate) : '',
             appointmentTime: formData.selectedTime?.displayTime || '',
-            contactMethod: 'zoom',
+            contactMethod: formData.contactMethod,
           }).catch((err) => {
             // Don't fail the registration if email fails
             console.error('Failed to send confirmation email:', err);
@@ -1184,6 +1196,40 @@ export default function VirtualRegistration() {
                             : 'Please enter a 10-digit phone number'}
                         </p>
                       )}
+
+                      {/* Optional email for reminders */}
+                      <div className="mt-6 pt-6 border-t border-gray-200">
+                        <label htmlFor="reminder-email-input" className="block">
+                          <h3 className="text-lg font-bold text-gray-900 mb-1">
+                            {formData.language === 'spanish' ? 'Correo para recordatorio (opcional)' : 'Reminder Email (optional)'}
+                          </h3>
+                          <p className="text-gray-500 text-sm mb-4">
+                            {formData.language === 'spanish'
+                              ? 'Te enviaremos un recordatorio 1 hora antes de tu cita.'
+                              : "We'll send you a reminder 1 hour before your appointment."}
+                          </p>
+                        </label>
+                        <input
+                          id="reminder-email-input"
+                          type="email"
+                          value={formData.reminderEmail}
+                          onChange={(e) => updateForm('reminderEmail', e.target.value)}
+                          placeholder={formData.language === 'spanish' ? 'tu@correo.com (opcional)' : 'your@email.com (optional)'}
+                          aria-label={formData.language === 'spanish' ? 'Correo para recordatorio' : 'Reminder email'}
+                          className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all text-base ${
+                            formData.reminderEmail && !isValidEmail(formData.reminderEmail)
+                              ? 'border-red-300'
+                              : 'border-gray-200'
+                          }`}
+                        />
+                        {formData.reminderEmail && !isValidEmail(formData.reminderEmail) && (
+                          <p className="text-red-500 text-sm mt-2" role="alert">
+                            {formData.language === 'spanish'
+                              ? 'Por favor ingresa un correo electrónico válido'
+                              : 'Please enter a valid email address'}
+                          </p>
+                        )}
+                      </div>
                     </>
                   )}
 
@@ -1264,6 +1310,40 @@ export default function VirtualRegistration() {
                         />
                         <span className="text-gray-700">{t.discordConfirm}</span>
                       </label>
+
+                      {/* Optional email for reminders */}
+                      <div className="mt-6 pt-6 border-t border-gray-200">
+                        <label htmlFor="discord-reminder-email" className="block">
+                          <h3 className="text-lg font-bold text-gray-900 mb-1">
+                            {formData.language === 'spanish' ? 'Correo para recordatorio (opcional)' : 'Reminder Email (optional)'}
+                          </h3>
+                          <p className="text-gray-500 text-sm mb-4">
+                            {formData.language === 'spanish'
+                              ? 'Te enviaremos un recordatorio 1 hora antes de tu cita.'
+                              : "We'll send you a reminder 1 hour before your appointment."}
+                          </p>
+                        </label>
+                        <input
+                          id="discord-reminder-email"
+                          type="email"
+                          value={formData.reminderEmail}
+                          onChange={(e) => updateForm('reminderEmail', e.target.value)}
+                          placeholder={formData.language === 'spanish' ? 'tu@correo.com (opcional)' : 'your@email.com (optional)'}
+                          aria-label={formData.language === 'spanish' ? 'Correo para recordatorio' : 'Reminder email'}
+                          className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-xl focus:border-az-purple focus:ring-0 outline-none transition-all text-base ${
+                            formData.reminderEmail && !isValidEmail(formData.reminderEmail)
+                              ? 'border-red-300'
+                              : 'border-gray-200'
+                          }`}
+                        />
+                        {formData.reminderEmail && !isValidEmail(formData.reminderEmail) && (
+                          <p className="text-red-500 text-sm mt-2" role="alert">
+                            {formData.language === 'spanish'
+                              ? 'Por favor ingresa un correo electrónico válido'
+                              : 'Please enter a valid email address'}
+                          </p>
+                        )}
+                      </div>
                     </>
                   )}
 
