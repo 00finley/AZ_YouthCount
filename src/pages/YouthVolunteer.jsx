@@ -29,16 +29,15 @@ const VOLUNTEER_COLORS = [
 
 export default function YouthVolunteer() {
   // Auth state
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [currentUser, setCurrentUser] = useState(null); // { username, name, isAdmin }
 
   // Volunteer state
   const [volunteers, setVolunteers] = useState([]);
-  const [myVolunteerId, setMyVolunteerId] = useState('');
-  const [myName, setMyName] = useState('');
-  const [isRegistered, setIsRegistered] = useState(false);
   const [allBookings, setAllBookings] = useState([]);
 
   // UI state
@@ -50,15 +49,18 @@ export default function YouthVolunteer() {
   // Check session storage for existing auth
   useEffect(() => {
     const auth = sessionStorage.getItem('youth_volunteer_auth');
-    const storedId = sessionStorage.getItem('youth_volunteer_id');
-    const storedName = sessionStorage.getItem('youth_volunteer_name');
+    const storedUser = sessionStorage.getItem('youth_volunteer_user');
 
-    if (auth === 'true') {
-      setIsAuthenticated(true);
-      if (storedId && storedName) {
-        setMyVolunteerId(storedId);
-        setMyName(storedName);
-        setIsRegistered(true);
+    if (auth === 'true' && storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+      } catch (e) {
+        // Invalid stored data, clear it
+        sessionStorage.removeItem('youth_volunteer_auth');
+        sessionStorage.removeItem('youth_volunteer_user');
+        sessionStorage.removeItem('youth_volunteer_token');
       }
     }
   }, []);
@@ -73,23 +75,24 @@ export default function YouthVolunteer() {
   const fetchData = async () => {
     try {
       const token = sessionStorage.getItem('youth_volunteer_token');
+      const storedUser = sessionStorage.getItem('youth_volunteer_user');
+      const user = storedUser ? JSON.parse(storedUser) : null;
+
+      if (!user) return;
+
       const response = await fetch('/api/youth-volunteers', {
-        headers: { 'X-Youth-Secret': token },
+        headers: {
+          'X-Youth-Secret': token,
+          'X-Youth-Username': user.username,
+        },
       });
       const data = await response.json();
 
       if (data.authenticated) {
         setVolunteers(data.volunteers || []);
         setAllBookings(data.allDiscordBookings || []);
-
-        // Check if current user exists
-        const storedId = sessionStorage.getItem('youth_volunteer_id');
-        if (storedId) {
-          const myData = data.volunteers.find(v => v.id === storedId);
-          if (myData) {
-            setMyName(myData.name);
-            setIsRegistered(true);
-          }
+        if (data.user) {
+          setCurrentUser(data.user);
         }
       }
     } catch (err) {
@@ -104,18 +107,23 @@ export default function YouthVolunteer() {
 
     try {
       const response = await fetch('/api/youth-volunteers', {
-        headers: { 'X-Youth-Secret': password },
+        headers: {
+          'X-Youth-Secret': password,
+          'X-Youth-Username': username.toLowerCase().trim(),
+        },
       });
       const data = await response.json();
 
       if (data.authenticated) {
         setIsAuthenticated(true);
+        setCurrentUser(data.user);
         sessionStorage.setItem('youth_volunteer_auth', 'true');
         sessionStorage.setItem('youth_volunteer_token', password);
+        sessionStorage.setItem('youth_volunteer_user', JSON.stringify(data.user));
         setVolunteers(data.volunteers || []);
         setAllBookings(data.allDiscordBookings || []);
       } else {
-        setError('Incorrect password');
+        setError(data.error || 'Invalid username or password');
       }
     } catch (err) {
       setError('Error authenticating');
@@ -124,56 +132,11 @@ export default function YouthVolunteer() {
     }
   };
 
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    if (!myName.trim()) {
-      showMessage('error', 'Please enter your name');
-      return;
-    }
-
-    setIsUpdating(true);
-
-    // Generate a simple ID from the name
-    const volunteerId = myName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now().toString(36);
-
-    try {
-      const token = sessionStorage.getItem('youth_volunteer_token');
-      const response = await fetch('/api/youth-volunteers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Youth-Secret': token,
-        },
-        body: JSON.stringify({
-          action: 'register',
-          volunteerId,
-          name: myName.trim(),
-          availability: [],
-        }),
-      });
-
-      if (response.ok) {
-        setMyVolunteerId(volunteerId);
-        setIsRegistered(true);
-        sessionStorage.setItem('youth_volunteer_id', volunteerId);
-        sessionStorage.setItem('youth_volunteer_name', myName.trim());
-        showMessage('success', 'Welcome! You can now select your availability.');
-        await fetchData();
-      } else {
-        showMessage('error', 'Failed to register');
-      }
-    } catch (err) {
-      showMessage('error', 'Error registering');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
   const handleToggleSlot = async (slotKey) => {
-    if (!isRegistered || isUpdating) return;
+    if (!currentUser || isUpdating) return;
 
     setIsUpdating(true);
-    const myVolunteer = volunteers.find(v => v.id === myVolunteerId);
+    const myVolunteer = volunteers.find(v => v.id === currentUser.username);
     const hasSlot = myVolunteer?.availability?.includes(slotKey);
 
     try {
@@ -183,10 +146,11 @@ export default function YouthVolunteer() {
         headers: {
           'Content-Type': 'application/json',
           'X-Youth-Secret': token,
+          'X-Youth-Username': currentUser.username,
         },
         body: JSON.stringify({
           action: hasSlot ? 'removeSlot' : 'addSlot',
-          volunteerId: myVolunteerId,
+          volunteerId: currentUser.username,
           slotKey,
         }),
       });
@@ -203,13 +167,13 @@ export default function YouthVolunteer() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    setIsRegistered(false);
-    setMyVolunteerId('');
-    setMyName('');
+    setCurrentUser(null);
+    setVolunteers([]);
+    setAllBookings([]);
     sessionStorage.removeItem('youth_volunteer_auth');
     sessionStorage.removeItem('youth_volunteer_token');
-    sessionStorage.removeItem('youth_volunteer_id');
-    sessionStorage.removeItem('youth_volunteer_name');
+    sessionStorage.removeItem('youth_volunteer_user');
+    setUsername('');
     setPassword('');
   };
 
@@ -278,7 +242,7 @@ export default function YouthVolunteer() {
   };
 
   // Get my bookings
-  const myBookings = allBookings.filter(b => b.assignedVolunteer === myVolunteerId);
+  const myBookings = currentUser ? allBookings.filter(b => b.assignedVolunteer === currentUser.username) : [];
 
   // Format time for display
   const formatTime = (timeStr) => {
@@ -319,10 +283,24 @@ export default function YouthVolunteer() {
               <span className="material-symbols-outlined text-3xl text-az-purple">group</span>
             </div>
             <h1 className="text-2xl font-black text-gray-900">Youth Board Portal</h1>
-            <p className="text-gray-500 text-sm mt-2">Enter the portal password to access</p>
+            <p className="text-gray-500 text-sm mt-2">Sign in to manage your availability</p>
           </div>
 
           <form onSubmit={handleLogin}>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Username
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-0 outline-none mb-4"
+              placeholder="Enter your username"
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+
             <label className="block text-sm font-bold text-gray-700 mb-2">
               Password
             </label>
@@ -332,7 +310,6 @@ export default function YouthVolunteer() {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-0 outline-none mb-4"
               placeholder="Enter portal password"
-              autoFocus
             />
 
             {error && (
@@ -341,10 +318,10 @@ export default function YouthVolunteer() {
 
             <button
               type="submit"
-              disabled={isLoading || !password}
+              disabled={isLoading || !password || !username.trim()}
               className="w-full py-3 bg-az-purple text-white font-bold rounded-xl disabled:opacity-50"
             >
-              {isLoading ? 'Checking...' : 'Enter Portal'}
+              {isLoading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
@@ -359,63 +336,6 @@ export default function YouthVolunteer() {
     );
   }
 
-  // Registration screen
-  if (!isRegistered) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-white shadow-sm border-b sticky top-0 z-10">
-          <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-            <h1 className="text-xl font-black text-gray-900">Youth Board Portal</h1>
-            <button
-              onClick={handleLogout}
-              className="text-gray-500 hover:text-gray-700 font-medium text-sm"
-            >
-              Logout
-            </button>
-          </div>
-        </header>
-
-        <main className="max-w-md mx-auto px-4 py-12">
-          <motion.div
-            className="bg-white rounded-2xl p-8 shadow-lg"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-az-blue/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="material-symbols-outlined text-3xl text-az-blue">person_add</span>
-              </div>
-              <h2 className="text-xl font-bold text-gray-900">Welcome!</h2>
-              <p className="text-gray-500 text-sm mt-2">Enter your name to get started</p>
-            </div>
-
-            <form onSubmit={handleRegister}>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Your Name
-              </label>
-              <input
-                type="text"
-                value={myName}
-                onChange={(e) => setMyName(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-az-purple focus:ring-0 outline-none mb-4"
-                placeholder="Enter your first name"
-                autoFocus
-              />
-
-              <button
-                type="submit"
-                disabled={isUpdating || !myName.trim()}
-                className="w-full py-3 bg-az-purple text-white font-bold rounded-xl disabled:opacity-50"
-              >
-                {isUpdating ? 'Setting up...' : 'Continue'}
-              </button>
-            </form>
-          </motion.div>
-        </main>
-      </div>
-    );
-  }
-
   // Main portal
   return (
     <div className="min-h-screen bg-gray-50">
@@ -424,7 +344,12 @@ export default function YouthVolunteer() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-black text-gray-900">Youth Board Portal</h1>
-            <p className="text-sm text-gray-500">Welcome, {myName}</p>
+            <p className="text-sm text-gray-500">
+              Welcome, {currentUser?.name}
+              {currentUser?.isAdmin && (
+                <span className="ml-2 bg-az-purple text-white text-xs px-2 py-0.5 rounded-full">Admin</span>
+              )}
+            </p>
           </div>
           <button
             onClick={handleLogout}
@@ -487,11 +412,11 @@ export default function YouthVolunteer() {
                   <div
                     key={volunteer.id}
                     className={`px-3 py-1 rounded-full text-sm font-medium border ${getVolunteerColor(volunteer.id)} ${
-                      volunteer.id === myVolunteerId ? 'ring-2 ring-az-purple ring-offset-1' : ''
+                      volunteer.id === currentUser?.username ? 'ring-2 ring-az-purple ring-offset-1' : ''
                     }`}
                   >
                     {volunteer.name}
-                    {volunteer.id === myVolunteerId && ' (You)'}
+                    {volunteer.id === currentUser?.username && ' (You)'}
                   </div>
                 ))}
               </div>
@@ -552,8 +477,8 @@ export default function YouthVolunteer() {
                         const slotKey = getSlotKey(date, time);
                         const slotVolunteers = getVolunteersForSlot(slotKey);
                         const booking = getBookingForSlot(slotKey);
-                        const isMySlot = slotVolunteers.some(v => v.id === myVolunteerId);
-                        const hasOthers = slotVolunteers.some(v => v.id !== myVolunteerId);
+                        const isMySlot = slotVolunteers.some(v => v.id === currentUser?.username);
+                        const hasOthers = slotVolunteers.some(v => v.id !== currentUser?.username);
 
                         return (
                           <button
@@ -575,7 +500,7 @@ export default function YouthVolunteer() {
                                   <div
                                     key={v.id}
                                     className={`w-2 h-2 rounded-full ${
-                                      v.id === myVolunteerId ? 'bg-az-purple' : 'bg-gray-400'
+                                      v.id === currentUser?.username ? 'bg-az-purple' : 'bg-gray-400'
                                     }`}
                                     title={v.name}
                                   />

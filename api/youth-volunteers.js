@@ -1,7 +1,18 @@
 import { createClient } from 'redis';
 
-// Youth volunteer portal password (different from admin)
+// Youth volunteer portal password (same for all users)
 const YOUTH_VOLUNTEER_PASSWORD = process.env.YOUTH_VOLUNTEER_PASSWORD || 'YouthBoard2026!';
+
+// Valid users - username: { name, isAdmin }
+const VALID_USERS = {
+  mfinley: { name: 'M. Finley', isAdmin: true },
+  dkenney: { name: 'D. Kenney', isAdmin: false },
+  svaldez: { name: 'S. Valdez', isAdmin: false },
+  jgarcia: { name: 'J. Garcia', isAdmin: false },
+  jfernandez: { name: 'J. Fernandez', isAdmin: false },
+  cyahuaca: { name: 'C. Yahuaca', isAdmin: false },
+  jlopez: { name: 'J. Lopez', isAdmin: false },
+};
 
 // Redis keys
 const YOUTH_VOLUNTEERS_KEY = 'youth_volunteers'; // Hash: volunteerId -> { name, availability: [...] }
@@ -31,9 +42,15 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Check authentication
+  // Check authentication - requires both username and password
   const providedPassword = req.headers['x-youth-secret'];
-  const isAuthenticated = providedPassword === YOUTH_VOLUNTEER_PASSWORD;
+  const providedUsername = req.headers['x-youth-username']?.toLowerCase();
+  const isValidUser = providedUsername && VALID_USERS[providedUsername];
+  const isAuthenticated = providedPassword === YOUTH_VOLUNTEER_PASSWORD && isValidUser;
+  const currentUser = isValidUser ? {
+    username: providedUsername,
+    ...VALID_USERS[providedUsername]
+  } : null;
 
   if (req.method === 'GET') {
     try {
@@ -61,13 +78,44 @@ export default async function handler(req, res) {
           };
         });
 
+        // Auto-create volunteer record if it doesn't exist for this user
+        const userVolunteer = volunteerList.find(v => v.id === providedUsername);
+        if (!userVolunteer) {
+          // Create volunteer record for new user
+          const volunteerData = {
+            name: currentUser.name,
+            availability: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          await client.hSet(YOUTH_VOLUNTEERS_KEY, providedUsername, JSON.stringify(volunteerData));
+          volunteerList.push({
+            id: providedUsername,
+            ...volunteerData,
+            assignedBookings: [],
+          });
+        }
+
         return res.status(200).json({
           authenticated: true,
+          user: currentUser,
           volunteers: volunteerList,
           allDiscordBookings: discordBookings,
         });
       } else {
-        // Not authenticated - return limited info for login page
+        // Not authenticated - return error message
+        if (providedPassword && !isValidUser) {
+          return res.status(401).json({
+            authenticated: false,
+            error: 'Invalid username',
+          });
+        }
+        if (providedUsername && providedPassword !== YOUTH_VOLUNTEER_PASSWORD) {
+          return res.status(401).json({
+            authenticated: false,
+            error: 'Invalid password',
+          });
+        }
         return res.status(200).json({
           authenticated: false,
           message: 'Authentication required',
@@ -85,42 +133,36 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { action, volunteerId, name, availability, slotKey } = req.body;
+    const { action, volunteerId, slotKey } = req.body;
+
+    // Users can only modify their own data (unless admin)
+    if (volunteerId && volunteerId !== providedUsername && !currentUser.isAdmin) {
+      return res.status(403).json({ error: 'You can only modify your own availability' });
+    }
+
+    // Use the logged-in username if no volunteerId provided
+    const targetVolunteerId = volunteerId || providedUsername;
 
     try {
       const client = await getRedisClient();
 
-      if (action === 'register' || action === 'updateAvailability') {
-        // Register new volunteer or update availability
-        if (!volunteerId || !name) {
-          return res.status(400).json({ error: 'Volunteer ID and name required' });
-        }
-
-        // Get existing data
-        const existingData = await client.hGet(YOUTH_VOLUNTEERS_KEY, volunteerId);
-        const existing = existingData ? (typeof existingData === 'string' ? JSON.parse(existingData) : existingData) : null;
-
-        const volunteerData = {
-          name,
-          availability: availability || existing?.availability || [],
-          createdAt: existing?.createdAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        await client.hSet(YOUTH_VOLUNTEERS_KEY, volunteerId, JSON.stringify(volunteerData));
-
-        return res.status(200).json({ success: true, volunteer: { id: volunteerId, ...volunteerData } });
-      }
-
       if (action === 'addSlot') {
         // Add a single availability slot
-        if (!volunteerId || !slotKey) {
-          return res.status(400).json({ error: 'Volunteer ID and slot key required' });
+        if (!slotKey) {
+          return res.status(400).json({ error: 'Slot key required' });
         }
 
-        const existingData = await client.hGet(YOUTH_VOLUNTEERS_KEY, volunteerId);
+        const existingData = await client.hGet(YOUTH_VOLUNTEERS_KEY, targetVolunteerId);
         if (!existingData) {
-          return res.status(404).json({ error: 'Volunteer not found' });
+          // Auto-create if not exists
+          const volunteerData = {
+            name: VALID_USERS[targetVolunteerId]?.name || targetVolunteerId,
+            availability: [slotKey],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          await client.hSet(YOUTH_VOLUNTEERS_KEY, targetVolunteerId, JSON.stringify(volunteerData));
+          return res.status(200).json({ success: true, volunteer: { id: targetVolunteerId, ...volunteerData } });
         }
 
         const volunteer = typeof existingData === 'string' ? JSON.parse(existingData) : existingData;
@@ -129,19 +171,19 @@ export default async function handler(req, res) {
         if (!volunteer.availability.includes(slotKey)) {
           volunteer.availability.push(slotKey);
           volunteer.updatedAt = new Date().toISOString();
-          await client.hSet(YOUTH_VOLUNTEERS_KEY, volunteerId, JSON.stringify(volunteer));
+          await client.hSet(YOUTH_VOLUNTEERS_KEY, targetVolunteerId, JSON.stringify(volunteer));
         }
 
-        return res.status(200).json({ success: true, volunteer: { id: volunteerId, ...volunteer } });
+        return res.status(200).json({ success: true, volunteer: { id: targetVolunteerId, ...volunteer } });
       }
 
       if (action === 'removeSlot') {
         // Remove a single availability slot
-        if (!volunteerId || !slotKey) {
-          return res.status(400).json({ error: 'Volunteer ID and slot key required' });
+        if (!slotKey) {
+          return res.status(400).json({ error: 'Slot key required' });
         }
 
-        const existingData = await client.hGet(YOUTH_VOLUNTEERS_KEY, volunteerId);
+        const existingData = await client.hGet(YOUTH_VOLUNTEERS_KEY, targetVolunteerId);
         if (!existingData) {
           return res.status(404).json({ error: 'Volunteer not found' });
         }
@@ -151,9 +193,9 @@ export default async function handler(req, res) {
         // Remove slot
         volunteer.availability = volunteer.availability.filter(s => s !== slotKey);
         volunteer.updatedAt = new Date().toISOString();
-        await client.hSet(YOUTH_VOLUNTEERS_KEY, volunteerId, JSON.stringify(volunteer));
+        await client.hSet(YOUTH_VOLUNTEERS_KEY, targetVolunteerId, JSON.stringify(volunteer));
 
-        return res.status(200).json({ success: true, volunteer: { id: volunteerId, ...volunteer } });
+        return res.status(200).json({ success: true, volunteer: { id: targetVolunteerId, ...volunteer } });
       }
 
       return res.status(400).json({ error: 'Invalid action' });
