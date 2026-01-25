@@ -198,6 +198,44 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, volunteer: { id: targetVolunteerId, ...volunteer } });
       }
 
+      if (action === 'markComplete') {
+        // Mark a booking as completed (or uncomplete)
+        const { bookingId, completed } = req.body;
+
+        if (!bookingId) {
+          return res.status(400).json({ error: 'Booking ID required' });
+        }
+
+        // Get all bookings
+        const bookingsRaw = await client.get(BOOKINGS_KEY);
+        const bookings = bookingsRaw ? JSON.parse(bookingsRaw) : [];
+
+        // Find the booking
+        const bookingIndex = bookings.findIndex(b => b.id === bookingId);
+        if (bookingIndex === -1) {
+          return res.status(404).json({ error: 'Booking not found' });
+        }
+
+        const booking = bookings[bookingIndex];
+
+        // Only the assigned volunteer or admin can mark as complete
+        if (booking.assignedVolunteer !== providedUsername && !currentUser.isAdmin) {
+          return res.status(403).json({ error: 'You can only mark your own bookings as complete' });
+        }
+
+        // Update the booking
+        bookings[bookingIndex] = {
+          ...booking,
+          completed: completed !== false,
+          completedAt: completed !== false ? new Date().toISOString() : null,
+          completedBy: completed !== false ? providedUsername : null,
+        };
+
+        await client.set(BOOKINGS_KEY, JSON.stringify(bookings));
+
+        return res.status(200).json({ success: true, booking: bookings[bookingIndex] });
+      }
+
       return res.status(400).json({ error: 'Invalid action' });
     } catch (error) {
       console.error('Error updating youth volunteer:', error);

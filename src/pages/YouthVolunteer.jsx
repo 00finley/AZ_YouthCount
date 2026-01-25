@@ -181,6 +181,40 @@ export default function YouthVolunteer() {
     setPassword('');
   };
 
+  const handleMarkComplete = async (bookingId, completed) => {
+    if (isUpdating) return;
+
+    setIsUpdating(true);
+    try {
+      const token = sessionStorage.getItem('youth_volunteer_token');
+      const response = await fetch('/api/youth-volunteers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Youth-Secret': token,
+          'X-Youth-Username': currentUser.username,
+        },
+        body: JSON.stringify({
+          action: 'markComplete',
+          bookingId,
+          completed,
+        }),
+      });
+
+      if (response.ok) {
+        showMessage('success', completed ? 'Survey marked as completed!' : 'Survey marked as pending');
+        await fetchData();
+      } else {
+        const data = await response.json();
+        showMessage('error', data.error || 'Failed to update');
+      }
+    } catch (err) {
+      showMessage('error', 'Error updating booking');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const showMessage = (type, text) => {
     setActionMessage({ type, text });
     setTimeout(() => setActionMessage({ type: '', text: '' }), 3000);
@@ -598,8 +632,20 @@ export default function YouthVolunteer() {
         {activeTab === 'bookings' && (
           <div className="bg-white rounded-xl shadow-sm border">
             <div className="p-4 border-b">
-              <h3 className="font-bold text-gray-900">Your Assigned Bookings</h3>
-              <p className="text-sm text-gray-500">These are the Discord calls you need to make</p>
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-bold text-gray-900">Your Assigned Bookings</h3>
+                  <p className="text-sm text-gray-500">These are the Discord calls you need to make</p>
+                </div>
+                {myBookings.length > 0 && (
+                  <div className="text-right">
+                    <div className="text-2xl font-black text-az-purple">
+                      {myBookings.filter(b => b.completed).length}/{myBookings.length}
+                    </div>
+                    <div className="text-xs text-gray-500">Completed</div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {myBookings.length === 0 ? (
@@ -618,10 +664,18 @@ export default function YouthVolunteer() {
                   const timeStr = parts[3];
 
                   return (
-                    <div key={booking.slotKey} className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-bold text-gray-900 text-lg">{booking.name}</div>
+                    <div key={booking.slotKey} className={`p-4 ${booking.completed ? 'bg-green-50' : ''}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="font-bold text-gray-900 text-lg">{booking.name}</div>
+                            {booking.completed && (
+                              <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
+                                <span className="material-symbols-outlined text-xs">check_circle</span>
+                                Completed
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-500 mt-1">
                             <span className="material-symbols-outlined text-sm align-middle mr-1">calendar_today</span>
                             {formatDate(dateStr)} at {formatTime(timeStr)}
@@ -632,10 +686,30 @@ export default function YouthVolunteer() {
                               Discord: {booking.contactInfo}
                             </div>
                           )}
+                          {booking.completed && booking.completedAt && (
+                            <div className="text-xs text-green-600 mt-2">
+                              Completed on {new Date(booking.completedAt).toLocaleDateString('en-US', {
+                                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+                              })}
+                            </div>
+                          )}
                         </div>
-                        <div className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-                          <span className="material-symbols-outlined text-sm">headset_mic</span>
-                          Discord Call
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                            <span className="material-symbols-outlined text-sm">headset_mic</span>
+                            Discord
+                          </div>
+                          <button
+                            onClick={() => handleMarkComplete(booking.id, !booking.completed)}
+                            disabled={isUpdating}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+                              booking.completed
+                                ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                : 'bg-green-500 text-white hover:bg-green-600'
+                            }`}
+                          >
+                            {booking.completed ? 'Mark Pending' : 'Mark Complete'}
+                          </button>
                         </div>
                       </div>
                     </div>

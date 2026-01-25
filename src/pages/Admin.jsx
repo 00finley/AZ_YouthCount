@@ -294,6 +294,87 @@ export default function Admin() {
     }
   };
 
+  // Export bookings to CSV
+  const exportToCSV = (data, filename) => {
+    if (!data || data.length === 0) {
+      showMessage('error', 'No data to export');
+      return;
+    }
+
+    // Get headers from first object
+    const headers = Object.keys(data[0]);
+
+    // Build CSV content
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row =>
+        headers.map(header => {
+          const value = row[header];
+          // Escape quotes and wrap in quotes if contains comma
+          const stringValue = value === null || value === undefined ? '' : String(value);
+          if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+            return `"${stringValue.replace(/"/g, '""')}"`;
+          }
+          return stringValue;
+        }).join(',')
+      )
+    ].join('\n');
+
+    // Download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    showMessage('success', `Exported ${data.length} records`);
+  };
+
+  // Export all bookings
+  const handleExportBookings = () => {
+    const exportData = bookings.map(b => ({
+      id: b.id,
+      date: b.slotKey?.substring(0, 10) || '',
+      time: b.slotKey?.substring(11) || '',
+      name: b.name || '',
+      contactMethod: b.contactMethod || '',
+      contactInfo: b.contactInfo || '',
+      reminderEmail: b.reminderEmail || '',
+      assignedVolunteer: b.assignedVolunteerName || b.assignedVolunteer || '',
+      completed: b.completed ? 'Yes' : 'No',
+      completedAt: b.completedAt || '',
+      bookedAt: b.bookedAt || '',
+    }));
+    exportToCSV(exportData, 'bookings');
+  };
+
+  // Export volunteer schedule
+  const handleExportVolunteerSchedule = () => {
+    const exportData = [];
+    Object.entries(volunteers).forEach(([id, volunteer]) => {
+      const volunteerBookings = bookings.filter(b => b.assignedVolunteer === id);
+      if (volunteerBookings.length > 0) {
+        volunteerBookings.forEach(b => {
+          exportData.push({
+            volunteer: volunteer.name,
+            volunteerId: id,
+            date: b.slotKey?.substring(0, 10) || '',
+            time: b.slotKey?.substring(11) || '',
+            participant: b.name || '',
+            contactMethod: b.contactMethod || '',
+            contactInfo: b.contactInfo || '',
+            completed: b.completed ? 'Yes' : 'No',
+          });
+        });
+      }
+    });
+    exportToCSV(exportData, 'volunteer_schedule');
+  };
+
+  // Calculate completion stats
+  const completedCount = bookings.filter(b => b.completed).length;
+  const completionRate = bookings.length > 0 ? Math.round((completedCount / bookings.length) * 100) : 0;
+
   // Group bookings by date
   const groupedByDate = bookings.reduce((acc, booking) => {
     const date = booking.slotKey.substring(0, 10);
@@ -496,10 +577,17 @@ export default function Admin() {
       {/* Main */}
       <main className="max-w-6xl mx-auto px-4 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <div className="bg-white rounded-xl shadow-sm border p-4">
             <div className="text-3xl font-black text-gray-900">{bookings.length}</div>
             <div className="text-sm text-gray-500">Total Bookings</div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-green-600">check_circle</span>
+              <span className="text-2xl font-bold text-gray-900">{completedCount}</span>
+            </div>
+            <div className="text-sm text-gray-500">Completed ({completionRate}%)</div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border p-4">
             <div className="flex items-center gap-2">
@@ -564,13 +652,29 @@ export default function Admin() {
                 </button>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setShowAddForm(true)}
                 className="px-4 py-2 bg-az-purple text-white font-medium rounded-lg hover:bg-az-purple/90 flex items-center gap-1"
               >
                 <span className="material-symbols-outlined text-lg">add</span>
                 Add Booking
+              </button>
+              <button
+                onClick={handleExportBookings}
+                disabled={bookings.length === 0}
+                className="px-4 py-2 bg-emerald-500 text-white font-medium rounded-lg hover:bg-emerald-600 disabled:opacity-50 flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-lg">download</span>
+                Export CSV
+              </button>
+              <button
+                onClick={handleExportVolunteerSchedule}
+                disabled={bookings.length === 0}
+                className="px-4 py-2 bg-cyan-500 text-white font-medium rounded-lg hover:bg-cyan-600 disabled:opacity-50 flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-lg">calendar_month</span>
+                Export Schedule
               </button>
               <button
                 onClick={fetchBookings}
