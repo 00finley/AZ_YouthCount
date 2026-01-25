@@ -23,6 +23,7 @@ import EmergencyBanner from './components/EmergencyBanner';
 import VirtualRegistration from './pages/VirtualRegistration';
 import NotFound from './pages/NotFound';
 import Admin from './pages/Admin';
+import YouthVolunteer from './pages/YouthVolunteer';
 
 // Main landing page
 function HomePage() {
@@ -88,6 +89,7 @@ function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/register" element={<VirtualRegistration />} />
       <Route path="/admin" element={<Admin />} />
+      <Route path="/youth-portal" element={<YouthVolunteer />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

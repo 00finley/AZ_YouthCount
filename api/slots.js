@@ -24,6 +24,7 @@ const CONFIG = {
 
 const REDIS_KEY = 'az_youth_count_booked_slots';
 const REDIS_KEY_V2 = 'az_youth_count_bookings_v2'; // New key with full booking data
+const YOUTH_VOLUNTEERS_KEY = 'youth_volunteers'; // Youth board Discord volunteers
 
 // Create Redis client
 let redis = null;
@@ -90,7 +91,7 @@ function getMaxSlots(dateStr) {
 }
 
 // Generate available slots based on volunteer availability
-function generateAvailableSlots(existingBookings) {
+function generateAvailableSlots(existingBookings, youthVolunteers = []) {
   const slots = {};
   const START_HOUR = 6;
   const END_HOUR = 18;
@@ -115,11 +116,8 @@ function generateAvailableSlots(existingBookings) {
           const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
           const slotKey = `${dateStr}-${timeStr}`;
 
-          // Check if any volunteer is available for this slot
+          // Check if any volunteer is available for this slot (phone/zoom)
           const hasVolunteer = isSlotAvailable(dateStr, hourDecimal);
-
-          // Check how many bookings exist for this slot
-          const bookingCount = existingBookings.filter(b => b.slotKey === slotKey).length;
 
           // Get available volunteers for this slot (for phone/zoom)
           const availableVolunteers = [];
@@ -135,12 +133,20 @@ function generateAvailableSlots(existingBookings) {
             }
           }
 
+          // Check for Discord availability (youth volunteers)
+          const availableYouthVolunteers = getAvailableYouthVolunteers(youthVolunteers, slotKey, existingBookings);
+          const hasDiscordVolunteer = availableYouthVolunteers.length > 0;
+
           slots[dateStr].push({
             time: timeStr,
             slotKey,
             hasVolunteer,
             availableVolunteerCount: availableVolunteers.length,
             isAvailable: availableVolunteers.length > 0,
+            // Discord availability
+            hasDiscordVolunteer,
+            availableDiscordVolunteerCount: availableYouthVolunteers.length,
+            isDiscordAvailable: hasDiscordVolunteer,
           });
         }
       }
@@ -199,6 +205,65 @@ async function saveBookingsV2(bookings) {
   }
 }
 
+// Get youth volunteer availability for Discord calls
+async function getYouthVolunteers() {
+  try {
+    const client = await getRedisClient();
+    const data = await client.hGetAll(YOUTH_VOLUNTEERS_KEY);
+    if (!data || Object.keys(data).length === 0) return [];
+
+    return Object.entries(data).map(([id, jsonStr]) => {
+      const parsed = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
+      return { id, ...parsed };
+    });
+  } catch (error) {
+    console.error('Error fetching youth volunteers:', error);
+    return [];
+  }
+}
+
+// Check if a youth volunteer is available for a specific slot
+function isYouthVolunteerAvailableForSlot(volunteer, slotKey) {
+  return volunteer.availability?.includes(slotKey) || false;
+}
+
+// Get available youth volunteers for a Discord slot
+function getAvailableYouthVolunteers(youthVolunteers, slotKey, existingBookings) {
+  return youthVolunteers.filter(v => {
+    // Check if volunteer has this slot in their availability
+    if (!isYouthVolunteerAvailableForSlot(v, slotKey)) return false;
+    // Check if already booked
+    const alreadyBooked = existingBookings.some(
+      b => b.slotKey === slotKey && b.assignedVolunteer === v.id
+    );
+    return !alreadyBooked;
+  });
+}
+
+// Select youth volunteer equitably for Discord booking
+function selectYouthVolunteer(youthVolunteers, slotKey, existingBookings) {
+  const available = getAvailableYouthVolunteers(youthVolunteers, slotKey, existingBookings);
+  if (available.length === 0) return null;
+
+  // Count current assignments
+  const counts = {};
+  for (const v of available) {
+    counts[v.id] = existingBookings.filter(b => b.assignedVolunteer === v.id).length;
+  }
+
+  // Select volunteer with fewest assignments
+  let minCount = Infinity;
+  let selected = null;
+  for (const v of available) {
+    if (counts[v.id] < minCount) {
+      minCount = counts[v.id];
+      selected = v;
+    }
+  }
+
+  return selected;
+}
+
 // Main handler
 export default async function handler(req, res) {
   // Set CORS headers
@@ -215,15 +280,16 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const bookedSlots = await getBookedSlots();
     const bookings = await getBookingsV2();
+    const youthVolunteers = await getYouthVolunteers();
 
-    // Generate available slots based on volunteer availability
-    const availableSlots = generateAvailableSlots(bookings);
+    // Generate available slots based on volunteer availability (including Discord)
+    const availableSlots = generateAvailableSlots(bookings, youthVolunteers);
 
     // Check if admin is requesting full data
     const adminSecret = req.headers['x-admin-secret'];
     if (adminSecret === CONFIG.ADMIN_SECRET) {
       const volunteers = getVolunteerSummary();
-      return res.status(200).json({ bookedSlots, bookings, availableSlots, volunteers });
+      return res.status(200).json({ bookedSlots, bookings, availableSlots, volunteers, youthVolunteers });
     }
 
     return res.status(200).json({ bookedSlots, availableSlots });
@@ -288,9 +354,16 @@ export default async function handler(req, res) {
         assignedVolunteerName = unbookedVolunteers[0].name;
       }
     } else if (contactMethod === 'discord') {
-      // Discord bookings don't have volunteer assignment yet
-      assignedVolunteer = null;
-      assignedVolunteerName = 'Peer Call (TBD)';
+      // Discord bookings - assign youth volunteer if available
+      const youthVolunteers = await getYouthVolunteers();
+      const selected = selectYouthVolunteer(youthVolunteers, slotKey, bookings);
+
+      if (!selected) {
+        return res.status(400).json({ error: 'No youth volunteers available for this Discord slot' });
+      }
+
+      assignedVolunteer = selected.id;
+      assignedVolunteerName = selected.name;
     }
 
     // Book the slot (legacy)
