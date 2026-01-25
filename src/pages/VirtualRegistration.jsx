@@ -431,11 +431,7 @@ export default function VirtualRegistration() {
     if (step !== CONFIRM_STEP) return;
     if (recaptchaWidgetId !== null) return; // Already rendered
 
-    let isMounted = true;
-
     const renderRecaptcha = () => {
-      if (!isMounted) return;
-
       const container = document.getElementById('recaptcha-container');
       if (!container) {
         // Container not ready yet, try again
@@ -451,17 +447,11 @@ export default function VirtualRegistration() {
       try {
         const widgetId = window.grecaptcha.render(container, {
           sitekey: CONFIG.RECAPTCHA_SITE_KEY,
-          callback: (token) => {
-            if (isMounted) setRecaptchaToken(token);
-          },
-          'expired-callback': () => {
-            if (isMounted) setRecaptchaToken(null);
-          },
-          'error-callback': () => {
-            if (isMounted) setRecaptchaToken(null);
-          },
+          callback: (token) => setRecaptchaToken(token),
+          'expired-callback': () => setRecaptchaToken(null),
+          'error-callback': () => setRecaptchaToken(null),
         });
-        if (isMounted) setRecaptchaWidgetId(widgetId);
+        setRecaptchaWidgetId(widgetId);
       } catch (e) {
         console.log('reCAPTCHA render error:', e.message);
         // If render fails, container might already have a widget - try resetting
@@ -488,7 +478,6 @@ export default function VirtualRegistration() {
     const timeoutId = setTimeout(() => clearInterval(checkInterval), 15000);
 
     return () => {
-      isMounted = false;
       clearInterval(checkInterval);
       clearTimeout(timeoutId);
     };
