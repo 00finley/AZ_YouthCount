@@ -431,20 +431,47 @@ export default function VirtualRegistration() {
     if (step !== CONFIRM_STEP) return;
     if (recaptchaWidgetId !== null) return; // Already rendered
 
+    let isMounted = true;
+
     const renderRecaptcha = () => {
+      if (!isMounted) return;
+
       const container = document.getElementById('recaptcha-container');
-      if (!container) return;
+      if (!container) {
+        // Container not ready yet, try again
+        setTimeout(renderRecaptcha, 100);
+        return;
+      }
+
+      // Check if container already has reCAPTCHA rendered (edge case)
+      if (container.hasChildNodes()) {
+        return;
+      }
 
       try {
         const widgetId = window.grecaptcha.render(container, {
           sitekey: CONFIG.RECAPTCHA_SITE_KEY,
-          callback: (token) => setRecaptchaToken(token),
-          'expired-callback': () => setRecaptchaToken(null),
-          'error-callback': () => setRecaptchaToken(null),
+          callback: (token) => {
+            if (isMounted) setRecaptchaToken(token);
+          },
+          'expired-callback': () => {
+            if (isMounted) setRecaptchaToken(null);
+          },
+          'error-callback': () => {
+            if (isMounted) setRecaptchaToken(null);
+          },
         });
-        setRecaptchaWidgetId(widgetId);
+        if (isMounted) setRecaptchaWidgetId(widgetId);
       } catch (e) {
         console.log('reCAPTCHA render error:', e.message);
+        // If render fails, container might already have a widget - try resetting
+        if (e.message?.includes('already been rendered')) {
+          try {
+            window.grecaptcha.reset();
+          } catch (resetErr) {
+            console.log('reCAPTCHA reset error:', resetErr.message);
+          }
+        }
       }
     };
 
@@ -452,8 +479,8 @@ export default function VirtualRegistration() {
     const checkInterval = setInterval(() => {
       if (window.grecaptcha && window.grecaptcha.render) {
         clearInterval(checkInterval);
-        // Small delay to ensure DOM is ready
-        setTimeout(renderRecaptcha, 100);
+        // Longer delay on mobile to ensure DOM is fully ready
+        setTimeout(renderRecaptcha, 200);
       }
     }, 200);
 
@@ -461,6 +488,7 @@ export default function VirtualRegistration() {
     const timeoutId = setTimeout(() => clearInterval(checkInterval), 15000);
 
     return () => {
+      isMounted = false;
       clearInterval(checkInterval);
       clearTimeout(timeoutId);
     };
@@ -595,7 +623,7 @@ export default function VirtualRegistration() {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 flex items-center justify-center p-4 relative overflow-x-hidden overscroll-none">
         {/* Large faded background logo - positioned left */}
         <div className="absolute inset-y-0 -left-24 md:-left-12 lg:left-8 flex items-center pointer-events-none" aria-hidden="true">
           <img
@@ -660,7 +688,7 @@ export default function VirtualRegistration() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 relative overflow-x-hidden overscroll-none">
       {/* Large faded background logo - positioned left */}
       <div className="absolute inset-y-0 -left-24 md:-left-12 lg:left-8 flex items-center pointer-events-none" aria-hidden="true">
         <img
@@ -1313,8 +1341,12 @@ export default function VirtualRegistration() {
                   </div>
 
                   {/* reCAPTCHA v2 Checkbox */}
-                  <div className="flex justify-center mb-6">
-                    <div id="recaptcha-container" key={`recaptcha-${recaptchaKey}`}></div>
+                  <div className="flex justify-center mb-6 overflow-visible">
+                    <div
+                      id="recaptcha-container"
+                      key={`recaptcha-${recaptchaKey}`}
+                      className="min-h-[78px]"
+                    ></div>
                   </div>
                   {!recaptchaToken && (
                     <p className="text-sm text-gray-500 mb-4">Please complete the reCAPTCHA above to continue.</p>

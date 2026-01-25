@@ -3,9 +3,26 @@
 @tailwind utilities;
 
 /* Base styles */
+html {
+  scroll-behavior: smooth;
+  /* Prevent overscroll bounce on mobile */
+  overscroll-behavior: none;
+}
+
 body {
   font-family: 'Public Sans', sans-serif;
   @apply bg-background-light text-gray-900 overflow-x-hidden;
+  /* Prevent overscroll bounce on mobile */
+  overscroll-behavior: none;
+  /* Prevent pull-to-refresh on mobile */
+  overscroll-behavior-y: none;
+}
+
+/* Prevent horizontal overflow causing bounce */
+#root {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
 }
 
 .material-symbols-outlined {
@@ -48,9 +65,14 @@ body {
   scrollbar-width: none;
 }
 
-/* Smooth scroll behavior */
-html {
-  scroll-behavior: smooth;
+/* reCAPTCHA responsive - scale down on small screens */
+@media screen and (max-width: 340px) {
+  .g-recaptcha,
+  #recaptcha-container,
+  #partner-recaptcha-container {
+    transform: scale(0.85);
+    transform-origin: center;
+  }
 }
 
 /* Leaflet custom styles */
