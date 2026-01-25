@@ -24,6 +24,7 @@ import VirtualRegistration from './pages/VirtualRegistration';
 import NotFound from './pages/NotFound';
 import Admin from './pages/Admin';
 import YouthVolunteer from './pages/YouthVolunteer';
+import Resources from './pages/Resources';
 
 // Main landing page
 function HomePage() {
@@ -90,6 +91,7 @@ function App() {
       <Route path="/register" element={<VirtualRegistration />} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/youth-portal" element={<YouthVolunteer />} />
+      <Route path="/resources" element={<Resources />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
