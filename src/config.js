@@ -45,7 +45,7 @@ export const CONFIG = {
   },
   
   // Count dates
-  COUNT_START_DATE: 'January 28, 2026',
+  COUNT_START_DATE: 'January 27, 2026',
   COUNT_END_DATE: 'February 13, 2026',
   
   // Gift card amount

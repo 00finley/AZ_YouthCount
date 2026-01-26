@@ -1,10 +1,12 @@
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 
 const navLinks = [
   { href: '#about', label: 'About' },
   { href: '#eligibility', label: 'Am I Eligible?' },
   { href: '#expect', label: 'What to Expect' },
   { href: '#map', label: 'Find a Site' },
+  { href: '/resources', label: 'Resources', external: true },
   { href: '#media-partners', label: 'Media & Partners' },
 ];
 
@@ -31,15 +33,27 @@ export default function Header({ mobileMenuOpen, setMobileMenuOpen }) {
             <div className="hidden lg:flex items-center gap-6">
               <nav className="flex gap-5">
                 {navLinks.map((link) => (
-                  <motion.a
-                    key={link.href}
-                    href={link.href}
-                    className="text-sm font-bold uppercase tracking-wide text-gray-700 hover:text-az-orange transition-colors relative group"
-                    whileHover={{ y: -2 }}
-                  >
-                    {link.label}
-                    <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-az-orange transition-all duration-300 group-hover:w-full" />
-                  </motion.a>
+                  link.external ? (
+                    <motion.div key={link.href} whileHover={{ y: -2 }}>
+                      <Link
+                        to={link.href}
+                        className="text-sm font-bold uppercase tracking-wide text-gray-700 hover:text-az-orange transition-colors relative group"
+                      >
+                        {link.label}
+                        <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-az-orange transition-all duration-300 group-hover:w-full" />
+                      </Link>
+                    </motion.div>
+                  ) : (
+                    <motion.a
+                      key={link.href}
+                      href={link.href}
+                      className="text-sm font-bold uppercase tracking-wide text-gray-700 hover:text-az-orange transition-colors relative group"
+                      whileHover={{ y: -2 }}
+                    >
+                      {link.label}
+                      <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-az-orange transition-all duration-300 group-hover:w-full" />
+                    </motion.a>
+                  )
                 ))}
               </nav>
               
@@ -89,17 +103,34 @@ export default function Header({ mobileMenuOpen, setMobileMenuOpen }) {
             >
               <nav className="flex flex-col p-6 gap-2">
                 {navLinks.map((link, index) => (
-                  <motion.a
-                    key={link.href}
-                    href={link.href}
-                    className="text-lg font-bold uppercase tracking-wide text-gray-900 hover:text-az-orange py-3 px-4 rounded-lg hover:bg-gray-50 transition-all"
-                    onClick={() => setMobileMenuOpen(false)}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    {link.label}
-                  </motion.a>
+                  link.external ? (
+                    <motion.div
+                      key={link.href}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <Link
+                        to={link.href}
+                        className="block text-lg font-bold uppercase tracking-wide text-gray-900 hover:text-az-orange py-3 px-4 rounded-lg hover:bg-gray-50 transition-all"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {link.label}
+                      </Link>
+                    </motion.div>
+                  ) : (
+                    <motion.a
+                      key={link.href}
+                      href={link.href}
+                      className="text-lg font-bold uppercase tracking-wide text-gray-900 hover:text-az-orange py-3 px-4 rounded-lg hover:bg-gray-50 transition-all"
+                      onClick={() => setMobileMenuOpen(false)}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      {link.label}
+                    </motion.a>
+                  )
                 ))}
                 
                 <motion.a

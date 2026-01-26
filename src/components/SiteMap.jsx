@@ -68,7 +68,7 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
 // Generate dates for the count period
 function generateCountDates() {
   // Use local dates to avoid timezone issues
-  const startDate = new Date(2026, 0, 28); // January 28, 2026
+  const startDate = new Date(2026, 0, 27); // January 27, 2026
   const endDate = new Date(2026, 1, 13);   // February 13, 2026
   const dates = [];
   
