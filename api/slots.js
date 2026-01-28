@@ -43,8 +43,8 @@ async function getRedisClient() {
 // Verify reCAPTCHA v2 token
 async function verifyRecaptcha(token) {
   if (!CONFIG.RECAPTCHA_SECRET_KEY) {
-    console.log('No reCAPTCHA secret key configured, skipping verification');
-    return true;
+    console.error('CRITICAL: RECAPTCHA_SECRET_KEY not configured - rejecting submission');
+    return false; // FAIL if no secret key - don't let bots through
   }
 
   if (!token) {
