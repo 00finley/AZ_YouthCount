@@ -20,7 +20,7 @@ import Footer from './components/Footer';
 import EmergencyBanner from './components/EmergencyBanner';
 
 // Pages
-import VirtualRegistrationSecure from './pages/VirtualRegistrationSecure';
+import VirtualRegistrationClosed from './pages/VirtualRegistrationClosed';
 import RegisterDisabled from './pages/RegisterDisabled';
 import NotFound from './pages/NotFound';
 import Admin from './pages/Admin';
@@ -89,8 +89,8 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      {/* New secure registration with v2+v3 reCAPTCHA and Origin checking */}
-      <Route path="/virtual" element={<VirtualRegistrationSecure />} />
+      {/* Virtual registration temporarily closed */}
+      <Route path="/virtual" element={<VirtualRegistrationClosed />} />
       {/* Old URL redirects to new - lets us track if bots still hit old URL */}
       <Route path="/register" element={<RegisterDisabled />} />
       <Route path="/admin" element={<Admin />} />
