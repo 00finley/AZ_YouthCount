@@ -583,53 +583,27 @@ export default function VirtualRegistration() {
         }
       }
 
-      // Submit form data
-      const response = await fetch(CONFIG.FORMSPREE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          _subject: `Virtual Survey Registration: ${formData.preferredName}`,
-          preferredName: formData.preferredName,
-          language: formData.language,
-          contactMethod: formData.contactMethod,
-          phoneNumber: formData.phoneNumber || 'N/A',
-          email: formData.email || 'N/A',
-          reminderEmail: formData.reminderEmail || 'N/A',
-          discordUser: formData.contactMethod === 'discord' ? formData.discordUsername : 'N/A',
+      // Registration successful - data is already saved to Redis via /api/slots
+      // No Formspree submission needed - this prevents bots from bypassing reCAPTCHA
+      // by POSTing directly to Formspree. All registrations must go through /api/slots.
+      setIsSubmitted(true);
+
+      // Send confirmation email - to primary email for zoom, or reminder email for phone/discord
+      const emailToSend = formData.contactMethod === 'zoom'
+        ? formData.email
+        : formData.reminderEmail;
+
+      if (emailToSend && isValidEmail(emailToSend)) {
+        sendConfirmationEmail({
+          toEmail: emailToSend,
+          toName: formData.preferredName,
           appointmentDate: formData.selectedDate ? formatDateDisplay(formData.selectedDate) : '',
           appointmentTime: formData.selectedTime?.displayTime || '',
-          slotKey: formData.selectedTime?.slotKey || '',
-          assignedVolunteer: assignedVolunteer || 'N/A',
-        }),
-      });
-
-      if (response.ok) {
-        setIsSubmitted(true);
-
-        // Send confirmation email - to primary email for zoom, or reminder email for phone/discord
-        const emailToSend = formData.contactMethod === 'zoom'
-          ? formData.email
-          : formData.reminderEmail;
-
-        if (emailToSend && isValidEmail(emailToSend)) {
-          sendConfirmationEmail({
-            toEmail: emailToSend,
-            toName: formData.preferredName,
-            appointmentDate: formData.selectedDate ? formatDateDisplay(formData.selectedDate) : '',
-            appointmentTime: formData.selectedTime?.displayTime || '',
-            contactMethod: formData.contactMethod,
-          }).catch((err) => {
-            // Don't fail the registration if email fails
-            console.error('Failed to send confirmation email:', err);
-          });
-        }
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Formspree error:', response.status, errorData);
-        alert(`Submission failed: ${errorData.error || 'Please try again.'}`);
+          contactMethod: formData.contactMethod,
+        }).catch((err) => {
+          // Don't fail the registration if email fails
+          console.error('Failed to send confirmation email:', err);
+        });
       }
     } catch (error) {
       console.error('Submission error:', error);
