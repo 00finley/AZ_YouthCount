@@ -515,8 +515,14 @@ export default function VirtualRegistration() {
         return;
       }
 
-      // Check reCAPTCHA v2 was completed
-      if (!recaptchaToken) {
+      // Check reCAPTCHA v2 was completed - use grecaptcha.getResponse() directly
+      // This is more reliable than React state as it's synchronous
+      let token = recaptchaToken;
+      if (window.grecaptcha && typeof recaptchaWidgetId === 'number') {
+        token = window.grecaptcha.getResponse(recaptchaWidgetId);
+      }
+
+      if (!token) {
         alert('Please complete the reCAPTCHA checkbox.');
         setIsSubmitting(false);
         return;
@@ -543,7 +549,7 @@ export default function VirtualRegistration() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               slotKey,
-              recaptchaToken,
+              recaptchaToken: token,
               name: formData.preferredName,
               contactMethod: formData.contactMethod,
               contactInfo,

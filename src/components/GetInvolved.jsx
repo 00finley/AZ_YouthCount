@@ -64,8 +64,14 @@ export default function GetInvolved() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Get reCAPTCHA token - use grecaptcha.getResponse() directly for reliability
+    let token = recaptchaToken;
+    if (window.grecaptcha && typeof recaptchaWidgetId === 'number') {
+      token = window.grecaptcha.getResponse(recaptchaWidgetId);
+    }
+
     // Check reCAPTCHA
-    if (!recaptchaToken) {
+    if (!token) {
       alert('Please complete the reCAPTCHA verification.');
       return;
     }
@@ -81,7 +87,7 @@ export default function GetInvolved() {
         body: JSON.stringify({
           ...formData,
           _subject: `Partner Inquiry: ${formData.organization}`,
-          'g-recaptcha-response': recaptchaToken,
+          'g-recaptcha-response': token,
         }),
       });
 
