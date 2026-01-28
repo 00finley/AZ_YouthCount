@@ -20,7 +20,8 @@ import Footer from './components/Footer';
 import EmergencyBanner from './components/EmergencyBanner';
 
 // Pages
-import VirtualRegistration from './pages/VirtualRegistration';
+import VirtualRegistrationSecure from './pages/VirtualRegistrationSecure';
+import RegisterDisabled from './pages/RegisterDisabled';
 import NotFound from './pages/NotFound';
 import Admin from './pages/Admin';
 import YouthVolunteer from './pages/YouthVolunteer';
@@ -88,7 +89,10 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/register" element={<VirtualRegistration />} />
+      {/* New secure registration with v2+v3 reCAPTCHA and Origin checking */}
+      <Route path="/virtual" element={<VirtualRegistrationSecure />} />
+      {/* Old URL redirects to new - lets us track if bots still hit old URL */}
+      <Route path="/register" element={<RegisterDisabled />} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/youth-portal" element={<YouthVolunteer />} />
       <Route path="/resources" element={<Resources />} />

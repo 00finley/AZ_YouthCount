@@ -99,7 +99,7 @@ export default function HowToParticipate() {
               </p>
               
               <Link
-                to="/register"
+                to="/virtual"
                 className="mt-auto inline-flex items-center justify-center px-6 py-3 rounded-lg bg-az-blue text-white font-black uppercase tracking-wide shadow-lg hover:bg-cyan-600 transition-colors"
               >
                 Schedule Now

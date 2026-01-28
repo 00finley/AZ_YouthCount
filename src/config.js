@@ -28,6 +28,10 @@ export const CONFIG = {
   // NOTE: You need a NEW key for v2 - v3 keys won't work!
   RECAPTCHA_SITE_KEY: '6LdXEVQsAAAAALbHVfTA814ZXca95ulnFeCJwq1t',
 
+  // Google reCAPTCHA v3 (Invisible - score-based)
+  // Runs in background, gives a score 0.0-1.0
+  RECAPTCHA_V3_SITE_KEY: '6Ld-P1MsAAAAAFGuG1dVv590YBtN0BpYRtSvI1J6',
+
   // Contact email (displayed on site)
   CONTACT_EMAIL: 'mfinley@azmag.gov',
   

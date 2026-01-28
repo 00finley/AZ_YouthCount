@@ -19,7 +19,12 @@ const CONFIG = {
   SLOTS_BEFORE_FEB_6: 1,
   SLOTS_FROM_FEB_6: 2,
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY || '',
+  RECAPTCHA_SECRET_KEY_V3: process.env.RECAPTCHA_SECRET_KEY_v3 || '',
   ADMIN_SECRET: process.env.ADMIN_SECRET || 'LHz*xnrrP8*nq',
+  // Allowed origins for registration (prevents direct API attacks)
+  ALLOWED_ORIGINS: ['https://azyouthcount.org', 'https://www.azyouthcount.org', 'http://localhost'],
+  // Minimum reCAPTCHA v3 score (0.0-1.0, higher = more likely human)
+  MIN_RECAPTCHA_V3_SCORE: 0.3,
 };
 
 const REDIS_KEY = 'az_youth_count_booked_slots';
@@ -77,6 +82,60 @@ async function verifyRecaptcha(token) {
     console.error('[reCAPTCHA] Network/fetch error:', error.message);
     return false;
   }
+}
+
+// Verify reCAPTCHA v3 token (returns score or null on failure)
+async function verifyRecaptchaV3(token) {
+  console.log('[reCAPTCHA v3] Starting verification...');
+
+  if (!CONFIG.RECAPTCHA_SECRET_KEY_V3) {
+    console.log('[reCAPTCHA v3] No v3 secret key configured - skipping v3 check');
+    return null; // v3 is optional enhancement
+  }
+
+  if (!token) {
+    console.log('[reCAPTCHA v3] No token provided');
+    return null;
+  }
+
+  try {
+    const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `secret=${CONFIG.RECAPTCHA_SECRET_KEY_V3}&response=${token}`,
+    });
+
+    const data = await response.json();
+    console.log('[reCAPTCHA v3] Google response:', JSON.stringify(data));
+
+    if (data.success === true) {
+      console.log('[reCAPTCHA v3] Score:', data.score, 'Action:', data.action);
+      return data.score;
+    } else {
+      console.log('[reCAPTCHA v3] Verification FAILED - error codes:', data['error-codes']);
+      return null;
+    }
+  } catch (error) {
+    console.error('[reCAPTCHA v3] Network/fetch error:', error.message);
+    return null;
+  }
+}
+
+// Check if request origin is allowed
+function isAllowedOrigin(req) {
+  const origin = req.headers.origin || '';
+  const referer = req.headers.referer || '';
+
+  // Check origin header
+  for (const allowed of CONFIG.ALLOWED_ORIGINS) {
+    if (origin.startsWith(allowed) || referer.startsWith(allowed)) {
+      console.log('[Security] Origin check PASSED:', origin || referer);
+      return true;
+    }
+  }
+
+  console.log('[Security] Origin check FAILED. Origin:', origin, 'Referer:', referer);
+  return false;
 }
 
 // Check if slot is valid
@@ -308,7 +367,13 @@ export default async function handler(req, res) {
 
   // POST - Book a new slot
   if (req.method === 'POST') {
-    const { slotKey, recaptchaToken, name, contactMethod, contactInfo, reminderEmail } = req.body;
+    // Security check 1: Origin header
+    if (!isAllowedOrigin(req)) {
+      console.log('[Security] Blocked request from unauthorized origin');
+      return res.status(403).json({ error: 'Forbidden - Origin not allowed' });
+    }
+
+    const { slotKey, recaptchaToken, recaptchaV3Token, name, contactMethod, contactInfo, reminderEmail } = req.body;
 
     if (!slotKey) {
       return res.status(400).json({ error: 'Slot key is required' });
@@ -322,10 +387,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Contact method is required' });
     }
 
-    // Verify reCAPTCHA
+    // Security check 2: Verify reCAPTCHA v2 (required)
     const isValidRecaptcha = await verifyRecaptcha(recaptchaToken);
     if (!isValidRecaptcha) {
       return res.status(400).json({ error: 'reCAPTCHA verification failed' });
+    }
+
+    // Security check 3: Verify reCAPTCHA v3 if provided (additional layer)
+    if (recaptchaV3Token) {
+      const v3Score = await verifyRecaptchaV3(recaptchaV3Token);
+      if (v3Score !== null && v3Score < CONFIG.MIN_RECAPTCHA_V3_SCORE) {
+        console.log('[Security] Blocked - v3 score too low:', v3Score);
+        return res.status(400).json({ error: 'Security verification failed - please try again' });
+      }
     }
 
     // Parse slot key for date and time
