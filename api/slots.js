@@ -42,15 +42,19 @@ async function getRedisClient() {
 
 // Verify reCAPTCHA v2 token
 async function verifyRecaptcha(token) {
-  if (!CONFIG.RECAPTCHA_SECRET_KEY) {
-    console.error('CRITICAL: RECAPTCHA_SECRET_KEY not configured - rejecting submission');
-    return false; // FAIL if no secret key - don't let bots through
-  }
+  console.log('[reCAPTCHA] Starting verification...');
 
-  if (!token) {
-    console.log('No reCAPTCHA token provided');
+  if (!CONFIG.RECAPTCHA_SECRET_KEY) {
+    console.error('[reCAPTCHA] CRITICAL: RECAPTCHA_SECRET_KEY not configured - rejecting');
     return false;
   }
+  console.log('[reCAPTCHA] Secret key is configured');
+
+  if (!token) {
+    console.log('[reCAPTCHA] No token provided - rejecting');
+    return false;
+  }
+  console.log('[reCAPTCHA] Token received, length:', token.length);
 
   try {
     const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
@@ -60,10 +64,17 @@ async function verifyRecaptcha(token) {
     });
 
     const data = await response.json();
-    // v2 just returns success: true/false (no score like v3)
-    return data.success === true;
+    console.log('[reCAPTCHA] Google response:', JSON.stringify(data));
+
+    if (data.success === true) {
+      console.log('[reCAPTCHA] Verification PASSED');
+      return true;
+    } else {
+      console.log('[reCAPTCHA] Verification FAILED - error codes:', data['error-codes']);
+      return false;
+    }
   } catch (error) {
-    console.error('reCAPTCHA verification error:', error);
+    console.error('[reCAPTCHA] Network/fetch error:', error.message);
     return false;
   }
 }
